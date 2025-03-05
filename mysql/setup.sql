@@ -1,6 +1,6 @@
 DROP DATABASE IF EXISTS tennis_reservations;
 
-CREATE DATABASE tennis_scheduler;
+CREATE DATABASE tennis_reservations;
 
 DROP USER IF EXISTS 'administrator'@'localhost';
 
@@ -11,9 +11,8 @@ USE tennis_reservations;
 
 CREATE TABLE IF NOT EXISTS members {
   name          VARCHAR(128) NOT NULL,
-  phone_number  VARCHAR(128),
-  email         VARCHAR(128),
-  date_joined   DATETIME NOT NULL,
+  phone_number  VARCHAR(128) NOT NULL,
+  email         VARCHAR(128) NOT NULL,
   PRIMARY KEY   (name, email)
 };
 
@@ -35,7 +34,17 @@ CREATE TABLE IF NOT EXISTS treasurer_members {
   PRIMARY KEY     (user_id, name)
 };
 
+CREATE TABLE IF NOT EXISTS courts {
+  court_number    INT(28) NOT NULL,
+  status          BOOLEAN NOT NULL,
+  PRIMARY KEY     (court_number, status)
+}
 
+CREATE TABLE IF NOT EXISTS guests {
+  name          VARCHAR(128) NOT NULL,
+  email         VARCHAR(128) NOT NULL,
+  PRIMARY KEY   (name, email)
+}
 
 CREATE TABLE IF NOT EXISTS all_members {
   user_id         VARCHAR(128) NOT NULL,
