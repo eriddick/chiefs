@@ -55,5 +55,5 @@ CREATE TABLE IF NOT EXISTS all_members {
   account_balance INT(28) NOT NULL,
   PRIMARY KEY     (user_id, name)
 }
-
+//fafafafaf
 source commands.sql;
