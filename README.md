@@ -1,7 +1,8 @@
 # chiefs
-CS 460W – Software Development
-Spring 2025
-Project Description
+CS 460W – Software Development,
+Spring 2025,
+Project Description:
+
 This is a team-oriented semester-long object-oriented software development project with
 deliverables throughout the semester. The software, written in Java or Python, involves the
 development of a program that implements a system that manages court reservations and
@@ -12,6 +13,7 @@ description of the problem. All data should be saved and managed by a database. 
 developed by the teams and their clients. The final product should be a complete software
 package that addresses the problem based on the specifications compiled by each team and their
 clients.
+
 The goal of this project is to produce a useful, user-friendly, and good quality software package,
 a final product that everyone would want to actually use. The project will utilize object-oriented
 and software engineering techniques and should be written in Java or Python. The project will
@@ -32,6 +34,7 @@ contributions.
 (4) Implementation (Entire source code, minutes) (20%)
 (5) Testing document (software testing scenarios, testing results, minutes) (15%)
 (6) Software release – Final Product & Report in APA format, class presentation (25%)
+
 Project Rules:
 • Come up with a team name and a project name. Be creative!
 • Maintain an online repository that would include all material related to the project
@@ -93,6 +96,7 @@ should try to resolve it among yourselves. Only if you are not successful should
 request my involvement to resolve the conflict.
 Note: This project description will be revised throughout the semester as we add the various
 deliverables.
+
 Teams and their members, weekly meeting time
 Team #1 Derim Belica, Nick Brown, Benjamin Kopf
 Team #2 Jacob Hart, Kyra Singh, Alex Cooke-Politikos
