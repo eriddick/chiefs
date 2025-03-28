@@ -9,10 +9,8 @@ import java.io.FileInputStream;
 import java.io.File;
 import java.io.IOException;
 
-/**
- * Main application class for the Tennis Club Management System with SQLite
- * This serves as the entry point and initializes all necessary components
- */
+// Main application class for the Tennis Club Management System with SQLite
+ 
 public class Main {
     private static final String CONFIG_FILE = "config.properties";
     private static DatabaseConnection dbConnection;
@@ -34,16 +32,14 @@ public class Main {
             System.exit(1);
         }
         
-        // Launch the application on the EDT
+        // Launch the application
         SwingUtilities.invokeLater(() -> {
             showLoginScreen();
         });
     }
     
-    /**
-     * Initializes the application, loading configuration and setting up database
-     * @return true if initialization succeeded, false otherwise
-     */
+    //Initializes the application, loading configuration and setting up database
+     
     private static boolean initializeApplication() {
         try {
             // Load configuration
@@ -89,11 +85,8 @@ public class Main {
         }
     }
     
-    /**
-     * Check if the SQLite database file exists
-     * @param dbPath JDBC connection string for SQLite
-     * @return true if the database file exists, false otherwise
-     */
+    //Check if the SQLite database file exists
+    
     private static boolean databaseExists(String dbPath) {
         // Extract file path from JDBC URL
         String filePath = dbPath.replace("jdbc:sqlite:", "jdbc:sqlite:tennis_club.db");
@@ -101,17 +94,15 @@ public class Main {
         return dbFile.exists() && dbFile.length() > 0;
     }
     
-    /**
-     * Creates and displays the login screen
-     */
+    // Creates and displays the login screen
+     
     private static void showLoginScreen() {
         LoginScreen loginScreen = new LoginScreen(dbConnection);
         loginScreen.setVisible(true);
     }
     
-    /**
-     * Creates a default configuration file if it doesn't exist
-     */
+    //Creates a default configuration file if it doesn't exist
+     
     private static void createDefaultConfig() {
         File configFile = new File(CONFIG_FILE);
         if (!configFile.exists()) {

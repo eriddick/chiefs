@@ -740,6 +740,5 @@ public class BillingSystem extends JFrame {
         }
     }
     
-    // Additional methods for handling late fees, etc.
-    // These would be implemented in a real system but are omitted here for brevity
+  
 }

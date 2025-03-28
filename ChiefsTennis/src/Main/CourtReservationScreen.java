@@ -647,15 +647,16 @@ public class CourtReservationScreen extends JFrame {
             try {
                 // 1. Insert into Reservations table
                 String reservationQuery = "INSERT INTO Reservations " +
-                    "(court_id, member_id, reservation_date, start_time, end_time, reservation_type, created_at) " +
-                    "VALUES (?, ?, ?, ?, ?, ?, NOW())";
+                	    "(court_id, member_id, reservation_date, start_time, end_time, reservation_type, created_at) " +
+                	    "VALUES (?, ?, ?, ?, ?, ?, datetime('now'))";
                 
                 PreparedStatement reservationStmt = conn.prepareStatement(reservationQuery, Statement.RETURN_GENERATED_KEYS);
                 reservationStmt.setInt(1, courtId);
                 reservationStmt.setInt(2, currentUser.getMemberId());
                 
-                java.sql.Date sqlDate = new java.sql.Date(selectedDate.getTime());
-                reservationStmt.setDate(3, sqlDate);
+                SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+                String formattedDate = dateFormat.format(selectedDate);
+                reservationStmt.setString(3, formattedDate);
                 
                 Time startTime = new Time(selectedTime.getTime());
                 reservationStmt.setTime(4, startTime);
@@ -691,20 +692,28 @@ public class CourtReservationScreen extends JFrame {
                     } else {
                         // Add guest - first create guest record
                         String guestQuery = "INSERT INTO Guests " +
-                            "(first_name, last_name, email, host_member_id, visit_date) " +
-                            "VALUES (?, ?, ?, ?, ?)";
+                        	    "(first_name, last_name, email, host_member_id, visit_date) " +
+                        	    "VALUES (?, ?, ?, ?, ?)";
+                        
+                 
+                        
+                     
                         
                         String[] nameParts = participant.getName().split(" ", 2);
                         String firstName = nameParts[0];
                         String lastName = nameParts.length > 1 ? nameParts[1] : "";
-                        
+
+                        // Format date as string in YYYY-MM-DD format for SQLite compatibility
+                        SimpleDateFormat dateFormat2 = new SimpleDateFormat("yyyy-MM-dd");
+                        String formattedDate2 = dateFormat2.format(selectedDate);
+
                         PreparedStatement guestStmt = conn.prepareStatement(guestQuery, Statement.RETURN_GENERATED_KEYS);
                         guestStmt.setString(1, firstName);
                         guestStmt.setString(2, lastName);
                         guestStmt.setString(3, participant.getEmail());
                         guestStmt.setInt(4, currentUser.getMemberId());
-                        guestStmt.setDate(5, sqlDate);
-                        
+                        guestStmt.setString(5, formattedDate); // Use setString instead of setDate
+
                         guestStmt.executeUpdate();
                         
                         ResultSet guestKeys = guestStmt.getGeneratedKeys();
@@ -728,8 +737,8 @@ public class CourtReservationScreen extends JFrame {
                         
                         // Add guest fee
                         String feeQuery = "INSERT INTO GuestFees " +
-                            "(member_id, guest_id, amount, date_applied, is_paid) " +
-                            "VALUES (?, ?, 5.00, CURDATE(), FALSE)";
+                                "(member_id, guest_id, amount, date_applied, is_paid) " +
+                                "VALUES (?, ?, 5.00, date('now'), 0)";
                         
                         PreparedStatement feeStmt = conn.prepareStatement(feeQuery);
                         feeStmt.setInt(1, currentUser.getMemberId());
@@ -742,16 +751,29 @@ public class CourtReservationScreen extends JFrame {
                         int month = currentCal.get(Calendar.MONTH) + 1; // Calendar months are 0-based
                         int year = currentCal.get(Calendar.YEAR);
                         
-                        String countQuery = "INSERT INTO GuestPassCount (member_id, month, year, count) " +
-                                          "VALUES (?, ?, ?, 1) " +
-                                          "ON DUPLICATE KEY UPDATE count = count + 1";
+                        String insertQuery = "INSERT OR IGNORE INTO GuestPassCount (member_id, month, year, count) " +
+                                "VALUES (?, ?, ?, 1)";
+                                
+            PreparedStatement insertStmt = conn.prepareStatement(insertQuery);
+            insertStmt.setInt(1, currentUser.getMemberId());
+            insertStmt.setInt(2, month);
+            insertStmt.setInt(3, year);
+            insertStmt.executeUpdate();
+            insertStmt.close();
+
+            // Then update the count if the record already existed
+            String updateQuery = "UPDATE GuestPassCount SET count = count + 1 " +
+                               "WHERE member_id = ? AND month = ? AND year = ? " +
+                               "AND count < 4"; // Optional: ensure we don't exceed 4 passes
+                               
+            PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
+            updateStmt.setInt(1, currentUser.getMemberId());
+            updateStmt.setInt(2, month);
+            updateStmt.setInt(3, year);
+            updateStmt.executeUpdate();
+            updateStmt.close();
                         
-                        PreparedStatement countStmt = conn.prepareStatement(countQuery);
-                        countStmt.setInt(1, currentUser.getMemberId());
-                        countStmt.setInt(2, month);
-                        countStmt.setInt(3, year);
-                        countStmt.executeUpdate();
-                        countStmt.close();
+                      
                     }
                 }
                 
@@ -821,7 +843,7 @@ public class CourtReservationScreen extends JFrame {
         }
     }
     
-    // Inner class to represent a participant entry
+    // class to represent a participant entry
     private class ParticipantEntry {
         private String type;
         private int memberId;
@@ -902,7 +924,7 @@ public class CourtReservationScreen extends JFrame {
         }
     }
     
-    // Temporary JDateChooser class (would normally use a library)
+    
     private class JDateChooser extends JPanel {
         private JTextField dateField;
         private JButton dateButton;
@@ -946,8 +968,7 @@ public class CourtReservationScreen extends JFrame {
         }
         
         private void showDatePickerDialog() {
-            // In a real application, you would use a proper date picker dialog
-            // This is a simplified version
+            
             String input = JOptionPane.showInputDialog(this, 
                 "Enter date (MM/dd/yyyy):", 
                 dateField.getText());

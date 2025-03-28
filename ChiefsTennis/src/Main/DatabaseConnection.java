@@ -3,23 +3,19 @@ package Main;
 import java.sql.*;
 import java.io.File;
 
-/**
- * Database connection class for SQLite
- */
+// Database connection class for SQLite
+ 
 public class DatabaseConnection {
     private String dbPath;
     
-    /**
-     * Default constructor using default database path
-     */
+    // Default constructor using default database path
+    
     public DatabaseConnection() {
         this.dbPath = "jdbc:sqlite:tennis_club.db";
     }
     
-    /**
-     * Constructor with custom database path
-     * @param dbPath Path to SQLite database file
-     */
+    //Constructor with custom database path
+    
     public DatabaseConnection(String dbPath) {
         if (dbPath == null || dbPath.isEmpty()) {
             this.dbPath = "jdbc:sqlite:tennis_club.db"; // Fallback to default
@@ -28,11 +24,8 @@ public class DatabaseConnection {
         }
     }
     
-    /**
-     * Get a database connection
-     * @return SQL Connection object
-     * @throws SQLException if connection fails
-     */
+    // Get a database connection
+    
     public Connection getConnection() throws SQLException {
         // Ensure SQLite JDBC driver is loaded
         try {
@@ -54,13 +47,8 @@ public class DatabaseConnection {
         return DriverManager.getConnection(dbPath);
     }
     
-    /**
-     * Executes a query and returns a ResultSet
-     * @param sql The SQL query to execute
-     * @param params Parameters for the prepared statement
-     * @return ResultSet from the query
-     * @throws SQLException If a database error occurs
-     */
+    // Executes a query and returns a ResultSet
+   
     public ResultSet executeQuery(String sql, Object... params) throws SQLException {
         Connection conn = getConnection();
         PreparedStatement stmt = conn.prepareStatement(sql);
@@ -71,19 +59,13 @@ public class DatabaseConnection {
         
         ResultSet rs = stmt.executeQuery();
         
-        // Note: Resources aren't closed here to allow the ResultSet to be used.
-        // The caller is responsible for closing the ResultSet, Statement, and Connection.
+      
         
         return rs;
     }
     
-    /**
-     * Executes an update query (INSERT, UPDATE, DELETE)
-     * @param sql The SQL query to execute
-     * @param params Parameters for the prepared statement
-     * @return Number of rows affected
-     * @throws SQLException If a database error occurs
-     */
+    // Executes an update query (INSERT, UPDATE, DELETE)
+   
     public int executeUpdate(String sql, Object... params) throws SQLException {
         Connection conn = null;
         PreparedStatement stmt = null;
@@ -103,13 +85,8 @@ public class DatabaseConnection {
         }
     }
     
-    /**
-     * Executes an insert query and returns the generated key
-     * @param sql The SQL query to execute
-     * @param params Parameters for the prepared statement
-     * @return The generated key, or -1 if none
-     * @throws SQLException If a database error occurs
-     */
+    //Executes an insert query and returns the generated key
+     
     public int executeInsert(String sql, Object... params) throws SQLException {
         Connection conn = null;
         PreparedStatement stmt = null;
@@ -149,11 +126,8 @@ public class DatabaseConnection {
         }
     }
     
-    /**
-     * Executes a transaction with multiple statements
-     * @param transaction A functional interface that represents the transaction
-     * @return true if transaction successful, false otherwise
-     */
+    // Executes a transaction with multiple statements
+    
     public boolean executeTransaction(Transaction transaction) {
         Connection conn = null;
         
@@ -189,17 +163,14 @@ public class DatabaseConnection {
         }
     }
     
-    /**
-     * Functional interface for transactions
-     */
+    //Functional interface for transactions
+     
     public interface Transaction {
         void execute(Connection conn) throws SQLException;
     }
     
-    /**
-     * Initialize the database with tables and sample data
-     * @return true if initialization was successful, false otherwise
-     */
+    // Initialize the database with tables and sample data
+   
     public boolean initializeDatabase() {
         Connection conn = null;
         
@@ -208,7 +179,7 @@ public class DatabaseConnection {
             Statement stmt = conn.createStatement();
             
             // Execute the initialization script
-            // This would typically be loaded from a resource file
+           
             String[] initStatements = getInitializationScript();
             
             conn.setAutoCommit(false);
@@ -233,8 +204,7 @@ public class DatabaseConnection {
                     } catch (SQLException e) {
                         System.err.println("Error executing statement: " + statement);
                         System.err.println("Error message: " + e.getMessage());
-                        // Continue with next statement instead of failing completely
-                        // This helps when some parts of initialization succeed
+                    
                     }
                 }
             }
@@ -278,12 +248,10 @@ public class DatabaseConnection {
         }
     }
     
-    /**
-     * Get the SQLite initialization script
-     * @return Array of SQL statements to initialize the database
-     */
+    
     private String[] getInitializationScript() {
-        // In a real application, this would be loaded from a file
+    	
+        // can be loaded from a file
         return new String[] {
             // Create the Members table
             "CREATE TABLE IF NOT EXISTS Members (" +
@@ -303,9 +271,9 @@ public class DatabaseConnection {
             "    user_id INTEGER PRIMARY KEY AUTOINCREMENT," +
             "    username TEXT UNIQUE NOT NULL," +
             "    password TEXT NOT NULL," +
-            "    role TEXT NOT NULL," +        // SQLite doesn't have ENUM, we use TEXT
+            "    role TEXT NOT NULL," +        
             "    member_id INTEGER," +
-            "    last_login TEXT," +          // SQLite doesn't have a DATETIME type, we use TEXT
+            "    last_login TEXT," +          
             "    FOREIGN KEY (member_id) REFERENCES Members(member_id)" +
             ");",
             
@@ -321,11 +289,11 @@ public class DatabaseConnection {
             "    reservation_id INTEGER PRIMARY KEY AUTOINCREMENT," +
             "    court_id INTEGER NOT NULL," +
             "    member_id INTEGER NOT NULL," +
-            "    reservation_date TEXT NOT NULL," +  // SQLite doesn't have a DATE type, we use TEXT
-            "    start_time TEXT NOT NULL," +        // SQLite doesn't have a TIME type, we use TEXT
-            "    end_time TEXT NOT NULL," +          // SQLite doesn't have a TIME type, we use TEXT
-            "    reservation_type TEXT NOT NULL," +  // SQLite doesn't have ENUM, we use TEXT
-            "    created_at TEXT NOT NULL," +        // SQLite doesn't have a DATETIME type, we use TEXT
+            "    reservation_date TEXT NOT NULL," +  
+            "    start_time TEXT NOT NULL," +       
+            "    end_time TEXT NOT NULL," +          
+            "    reservation_type TEXT NOT NULL," +  
+            "    created_at TEXT NOT NULL," +        
             "    FOREIGN KEY (court_id) REFERENCES Courts(court_id)," +
             "    FOREIGN KEY (member_id) REFERENCES Members(member_id)" +
             ");",
@@ -337,7 +305,7 @@ public class DatabaseConnection {
             "    last_name TEXT NOT NULL," +
             "    email TEXT NOT NULL," +
             "    host_member_id INTEGER NOT NULL," +
-            "    visit_date TEXT NOT NULL," +  // SQLite doesn't have a DATE type, we use TEXT
+            "    visit_date TEXT NOT NULL," +  
             "    FOREIGN KEY (host_member_id) REFERENCES Members(member_id)" +
             ");",
             
@@ -357,10 +325,10 @@ public class DatabaseConnection {
             "    fee_id INTEGER PRIMARY KEY AUTOINCREMENT," +
             "    member_id INTEGER NOT NULL," +
             "    fee_year INTEGER NOT NULL," +
-            "    amount REAL NOT NULL," +      // SQLite uses REAL for DECIMAL
-            "    due_date TEXT NOT NULL," +    // SQLite doesn't have a DATE type, we use TEXT
-            "    paid_date TEXT," +            // SQLite doesn't have a DATE type, we use TEXT
-            "    is_paid INTEGER DEFAULT 0," + // SQLite uses INTEGER for BOOLEAN (0=false, 1=true)
+            "    amount REAL NOT NULL," +      
+            "    due_date TEXT NOT NULL," +    
+            "    paid_date TEXT," +            
+            "    is_paid INTEGER DEFAULT 0," + 
             "    FOREIGN KEY (member_id) REFERENCES Members(member_id)" +
             ");",
             
@@ -369,9 +337,9 @@ public class DatabaseConnection {
             "    late_fee_id INTEGER PRIMARY KEY AUTOINCREMENT," +
             "    member_id INTEGER NOT NULL," +
             "    fee_id INTEGER NOT NULL," +
-            "    amount REAL NOT NULL," +      // SQLite uses REAL for DECIMAL
-            "    month_applied TEXT NOT NULL," + // SQLite doesn't have a DATE type, we use TEXT
-            "    is_paid INTEGER DEFAULT 0," +   // SQLite uses INTEGER for BOOLEAN (0=false, 1=true)
+            "    amount REAL NOT NULL," +      
+            "    month_applied TEXT NOT NULL," + 
+            "    is_paid INTEGER DEFAULT 0," +   
             "    FOREIGN KEY (member_id) REFERENCES Members(member_id)," +
             "    FOREIGN KEY (fee_id) REFERENCES MembershipFees(fee_id)" +
             ");",
@@ -381,9 +349,9 @@ public class DatabaseConnection {
             "    guest_fee_id INTEGER PRIMARY KEY AUTOINCREMENT," +
             "    member_id INTEGER NOT NULL," +
             "    guest_id INTEGER NOT NULL," +
-            "    amount REAL NOT NULL DEFAULT 5.00," +  // SQLite uses REAL for DECIMAL
-            "    date_applied TEXT NOT NULL," +         // SQLite doesn't have a DATE type, we use TEXT
-            "    is_paid INTEGER DEFAULT 0," +          // SQLite uses INTEGER for BOOLEAN (0=false, 1=true)
+            "    amount REAL NOT NULL DEFAULT 5.00," +  
+            "    date_applied TEXT NOT NULL," +         
+            "    is_paid INTEGER DEFAULT 0," +          
             "    FOREIGN KEY (member_id) REFERENCES Members(member_id)," +
             "    FOREIGN KEY (guest_id) REFERENCES Guests(guest_id)" +
             ");",
@@ -393,7 +361,7 @@ public class DatabaseConnection {
             "    history_id INTEGER PRIMARY KEY AUTOINCREMENT," +
             "    member_id INTEGER NOT NULL," +
             "    start_date TEXT NOT NULL," +  // SQLite doesn't have a DATE type, we use TEXT
-            "    end_date TEXT," +             // SQLite doesn't have a DATE type, we use TEXT
+            "    end_date TEXT," +             
             "    reason TEXT," +
             "    FOREIGN KEY (member_id) REFERENCES Members(member_id)" +
             ");",
@@ -402,11 +370,11 @@ public class DatabaseConnection {
             "CREATE TABLE IF NOT EXISTS Bills (" +
             "    bill_id INTEGER PRIMARY KEY AUTOINCREMENT," +
             "    member_id INTEGER NOT NULL," +
-            "    bill_date TEXT NOT NULL," +   // SQLite doesn't have a DATE type, we use TEXT
-            "    total_amount REAL NOT NULL," + // SQLite uses REAL for DECIMAL
-            "    due_date TEXT NOT NULL," +     // SQLite doesn't have a DATE type, we use TEXT
+            "    bill_date TEXT NOT NULL," +   
+            "    total_amount REAL NOT NULL," + 
+            "    due_date TEXT NOT NULL," +     
             "    is_paid INTEGER DEFAULT 0," +  // SQLite uses INTEGER for BOOLEAN (0=false, 1=true)
-            "    sent_email INTEGER DEFAULT 0," + // SQLite uses INTEGER for BOOLEAN (0=false, 1=true)
+            "    sent_email INTEGER DEFAULT 0," + 
             "    FOREIGN KEY (member_id) REFERENCES Members(member_id)" +
             ");",
             
@@ -416,7 +384,7 @@ public class DatabaseConnection {
             "    bill_id INTEGER NOT NULL," +
             "    description TEXT NOT NULL," +
             "    amount REAL NOT NULL," +      // SQLite uses REAL for DECIMAL
-            "    item_type TEXT NOT NULL," +   // SQLite doesn't have ENUM, we use TEXT
+            "    item_type TEXT NOT NULL," +   
             "    reference_id INTEGER," +
             "    FOREIGN KEY (bill_id) REFERENCES Bills(bill_id)" +
             ");",

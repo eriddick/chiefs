@@ -232,8 +232,7 @@ public class AdminDashboard extends JFrame {
         JPanel chartPanel = new JPanel();
         chartPanel.setLayout(new BorderLayout());
         
-        // In a real application, this would use a charting library to display membership statistics
-        // For this example, we'll use a simple text area
+    
         
         JTextArea statsArea = new JTextArea();
         statsArea.setEditable(false);

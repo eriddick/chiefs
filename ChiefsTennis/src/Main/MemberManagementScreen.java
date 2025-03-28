@@ -407,8 +407,7 @@ public class MemberManagementScreen extends JFrame {
                 ResultSet pastRs = pastStmt.executeQuery(pastQuery);
                 
                 while (pastRs.next()) {
-                    // We would add this data to a different table or section
-                    // This is simplified for this example
+                    
                 }
                 
                 pastRs.close();

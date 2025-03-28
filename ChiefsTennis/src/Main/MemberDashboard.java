@@ -309,13 +309,13 @@ public class MemberDashboard extends JFrame {
             
             // Get upcoming reservations
             String query = "SELECT r.reservation_id, c.court_number, r.reservation_date, r.start_time, r.end_time, " +
-                    "r.reservation_type, COUNT(rp.participant_id) AS participant_count " +
-                    "FROM Reservations r " +
-                    "JOIN Courts c ON r.court_id = c.court_id " +
-                    "LEFT JOIN ReservationParticipants rp ON r.reservation_id = rp.reservation_id " +
-                    "WHERE r.member_id = ? AND r.reservation_date >= date('now') " + // Changed from CURDATE()
-                    "GROUP BY r.reservation_id " +
-                    "ORDER BY r.reservation_date, r.start_time";
+                          "r.reservation_type, COUNT(rp.participant_id) AS participant_count " +
+                          "FROM Reservations r " +
+                          "JOIN Courts c ON r.court_id = c.court_id " +
+                          "LEFT JOIN ReservationParticipants rp ON r.reservation_id = rp.reservation_id " +
+                          "WHERE r.member_id = ? AND r.reservation_date >= date('now') " +
+                          "GROUP BY r.reservation_id " +
+                          "ORDER BY r.reservation_date, r.start_time";
             
             PreparedStatement stmt = conn.prepareStatement(query);
             stmt.setInt(1, currentUser.getMemberId());
@@ -323,21 +323,38 @@ public class MemberDashboard extends JFrame {
             ResultSet rs = stmt.executeQuery();
             
             SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy");
-            SimpleDateFormat timeFormat = new SimpleDateFormat("h:mm a");
             
             while (rs.next()) {
                 int reservationId = rs.getInt("reservation_id");
                 int courtNumber = rs.getInt("court_number");
-                java.sql.Date date = rs.getDate("reservation_date");
-                java.sql.Time startTime = rs.getTime("start_time");
-                java.sql.Time endTime = rs.getTime("end_time");
+                String dateStr = rs.getString("reservation_date");
+                String startTimeStr = rs.getString("start_time");
+                String endTimeStr = rs.getString("end_time");
                 String type = rs.getString("reservation_type");
                 int participantCount = rs.getInt("participant_count");
                 
+                // Use the TimeParser utility to safely parse and format times
+                String formattedStartTime = TimeParser.parseTimeToDisplay(startTimeStr);
+                String formattedEndTime = TimeParser.parseTimeToDisplay(endTimeStr);
+                String timeRange = formattedStartTime + " - " + formattedEndTime;
+                
+                // Format the date if possible
+                String formattedDate = dateStr;
+                try {
+                    if (dateStr.matches("\\d{4}-\\d{2}-\\d{2}")) {
+                        // Convert YYYY-MM-DD to MM/DD/YYYY
+                        String[] parts = dateStr.split("-");
+                        formattedDate = parts[1] + "/" + parts[2] + "/" + parts[0];
+                    }
+                } catch (Exception e) {
+                    // If date parsing fails, use original
+                    System.out.println("Error parsing date: " + dateStr);
+                }
+                
                 reservationsTableModel.addRow(new Object[]{
                     "Court " + courtNumber,
-                    dateFormat.format(date),
-                    timeFormat.format(startTime) + " - " + timeFormat.format(endTime),
+                    formattedDate,
+                    timeRange,
                     type,
                     participantCount + " players",
                     "Cancel"
@@ -349,13 +366,65 @@ public class MemberDashboard extends JFrame {
             conn.close();
             
         } catch (SQLException ex) {
+            ex.printStackTrace(); // Print trace for debugging
             JOptionPane.showMessageDialog(this, 
                 "Error loading reservations: " + ex.getMessage(), 
                 "Database Error", 
                 JOptionPane.ERROR_MESSAGE);
         }
     }
-    
+    public void standardizeAllTimeFormats() {
+        try {
+            Connection conn = dbConnection.getConnection();
+            conn.setAutoCommit(false);
+            
+            // Get all reservations
+            Statement stmt = conn.createStatement();
+            ResultSet rs = stmt.executeQuery("SELECT reservation_id, start_time, end_time FROM Reservations");
+            
+            // Prepare update statement
+            PreparedStatement updateStmt = conn.prepareStatement(
+                "UPDATE Reservations SET start_time = ?, end_time = ? WHERE reservation_id = ?");
+            
+            int updateCount = 0;
+            
+            while (rs.next()) {
+                int id = rs.getInt("reservation_id");
+                String startTime = rs.getString("start_time");
+                String endTime = rs.getString("end_time");
+                
+                // Standardize formats
+                String formattedStartTime = TimeParser.standardizeTimeFormat(startTime);
+                String formattedEndTime = TimeParser.standardizeTimeFormat(endTime);
+                
+                updateStmt.setString(1, formattedStartTime);
+                updateStmt.setString(2, formattedEndTime);
+                updateStmt.setInt(3, id);
+                updateStmt.executeUpdate();
+                
+                updateCount++;
+            }
+            
+            conn.commit();
+            
+            rs.close();
+            updateStmt.close();
+            stmt.close();
+            conn.close();
+            
+            JOptionPane.showMessageDialog(null, 
+                "Successfully standardized " + updateCount + " reservation time formats.", 
+                "Database Update", 
+                JOptionPane.INFORMATION_MESSAGE);
+            
+        } catch (SQLException ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(null, 
+                "Error updating time formats: " + ex.getMessage(), 
+                "Database Error", 
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
     private void cancelReservation(int row) {
         int result = JOptionPane.showConfirmDialog(this,
             "Are you sure you want to cancel this reservation?",
@@ -376,11 +445,13 @@ public class MemberDashboard extends JFrame {
             
             int courtNumber = Integer.parseInt(court.replace("Court ", ""));
             
+            
+            
             // Get reservation ID
             String findQuery = "SELECT r.reservation_id FROM Reservations r " +
                               "JOIN Courts c ON r.court_id = c.court_id " +
                               "WHERE c.court_number = ? AND r.member_id = ? " +
-                              "AND r.reservation_date = STR_TO_DATE(?, '%m/%d/%Y') " +
+                              "AND r.reservation_date = ? " +
                               "ORDER BY r.reservation_date, r.start_time";
             
             PreparedStatement findStmt = conn.prepareStatement(findQuery);
@@ -741,33 +812,46 @@ public class MemberDashboard extends JFrame {
                 // Get selected date
                 String dateStr = (String) dateComboBox.getSelectedItem();
                 
+                // Convert date format from MM/DD/YYYY to YYYY-MM-DD for SQLite
+                String formattedDate = convertDateFormat(dateStr);
+                
+                System.out.println("Looking for reservations on date: " + formattedDate);
+                
                 // Get reservations for the selected date
                 String query = "SELECT c.court_number, r.start_time, r.end_time, r.reservation_type, " +
-                              "m.first_name, m.last_name " +
+                              "m.first_name, m.last_name, r.reservation_date " +
                               "FROM Reservations r " +
                               "JOIN Courts c ON r.court_id = c.court_id " +
                               "JOIN Members m ON r.member_id = m.member_id " +
-                              "WHERE r.reservation_date = STR_TO_DATE(?, '%m/%d/%Y') " +
+                              "WHERE r.reservation_date = ? " +
                               "ORDER BY c.court_number, r.start_time";
                 
                 PreparedStatement stmt = conn.prepareStatement(query);
-                stmt.setString(1, dateStr);
+                stmt.setString(1, formattedDate);
                 
                 ResultSet rs = stmt.executeQuery();
                 
                 while (rs.next()) {
                     int courtNumber = rs.getInt("court_number");
-                    Time startTime = rs.getTime("start_time");
-                    Time endTime = rs.getTime("end_time");
+                    String startTimeStr = rs.getString("start_time");
+                    String endTimeStr = rs.getString("end_time");
                     String type = rs.getString("reservation_type");
                     String firstName = rs.getString("first_name");
                     String lastName = rs.getString("last_name");
+                    String resDate = rs.getString("reservation_date");
                     
-                    // Calculate which columns to fill
-                    int startHour = startTime.getHours();
-                    int endHour = endTime.getHours();
+                    System.out.println("Found reservation: Court " + courtNumber + 
+                                      " on " + resDate + 
+                                      " start time " + startTimeStr +
+                                      " end time " + endTimeStr);
                     
-                    if (endTime.getMinutes() > 0) {
+                    // Use TimeParser to safely get hour values
+                    int startHour = TimeParser.parseHour(startTimeStr);
+                    int endHour = TimeParser.parseHour(endTimeStr);
+                    
+                    System.out.println("Parsed hours: start=" + startHour + ", end=" + endHour);
+                    
+                    if (TimeParser.parseMinutes(endTimeStr) > 0) {
                         endHour++; // Round up to cover partial hours
                     }
                     
@@ -783,12 +867,15 @@ public class MemberDashboard extends JFrame {
                     
                     // Find the row for this court
                     int row = courtNumber - 1;
-                    
-                    // Fill in reservation info
-                    String reservationInfo = type + ": " + firstName.charAt(0) + ". " + lastName;
-                    
-                    for (int col = startCol; col < endCol; col++) {
-                        scheduleTableModel.setValueAt(reservationInfo, row, col);
+                    if (row >= 0 && row < scheduleTableModel.getRowCount()) {
+                        // Fill in reservation info
+                        String reservationInfo = type + ": " + firstName.charAt(0) + ". " + lastName;
+                        
+                        for (int col = startCol; col < endCol; col++) {
+                            if (col < scheduleTableModel.getColumnCount()) {
+                                scheduleTableModel.setValueAt(reservationInfo, row, col);
+                            }
+                        }
                     }
                 }
                 
@@ -797,6 +884,7 @@ public class MemberDashboard extends JFrame {
                 conn.close();
                 
             } catch (SQLException ex) {
+                ex.printStackTrace();
                 JOptionPane.showMessageDialog(this, 
                     "Error loading schedule: " + ex.getMessage(), 
                     "Database Error", 
@@ -804,7 +892,45 @@ public class MemberDashboard extends JFrame {
             }
         }
         
-        // Custom cell renderer to color-code reservations
+     // Helper method to convert date format
+        private String convertDateFormat(String dateStr) {
+            try {
+                String[] parts = dateStr.split("/");
+                if (parts.length == 3) {
+                    // Convert from MM/DD/YYYY to YYYY-MM-DD
+                    return parts[2] + "-" + parts[0] + "-" + parts[1];
+                }
+            } catch (Exception e) {
+                // If parsing fails, return the original string
+            }
+            return dateStr;
+        }
+        
+        
+        private int parseHour(String timeStr) {
+            try {
+                return Integer.parseInt(timeStr.split(":")[0]);
+            } catch (Exception e) {
+                return 0;
+            }
+        }
+        
+     // Helper method to extract minutes from time string
+        private int parseMinutes(String timeStr) {
+            try {
+                String[] parts = timeStr.split(":");
+                if (parts.length >= 2) {
+                    return Integer.parseInt(parts[1]);
+                }
+            } catch (Exception e) {
+                // If parsing fails, return 0
+            }
+            return 0;
+        }
+        
+        
+        
+        // Custom cell renderer to color-code reservations(google)
         private class ScheduleCellRenderer extends DefaultTableCellRenderer {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, 
