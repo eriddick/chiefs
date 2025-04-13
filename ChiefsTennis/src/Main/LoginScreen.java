@@ -194,6 +194,18 @@ public class LoginScreen extends JFrame {
                         JOptionPane.ERROR_MESSAGE);
         }
     }
+    //For testing purposes
+    public JTextField getUsernameField() {
+      return usernameField;
+    }
+
+    public JPasswordField getPasswordField() {
+      return passwordField;
+    }
+
+    public JButton getLoginButton() {
+      return loginButton;
+    }
 }
 
 class User {

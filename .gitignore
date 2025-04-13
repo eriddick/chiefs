@@ -24,6 +24,8 @@ bin/
 
 ### VS Code ###
 .vscode/
+lib/
+test-lib1/
 
 ### Mac OS ###
 .DS_Store
