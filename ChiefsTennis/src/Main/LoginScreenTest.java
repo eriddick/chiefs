@@ -73,8 +73,8 @@ public class LoginScreenTest {
         when(mockResultSet.getInt("user_id")).thenReturn(1);
         when(mockResultSet.getString("role")).thenReturn("ADMIN");
         when(mockResultSet.getInt("member_id")).thenReturn(10);
-        when(mockResultSet.getString("first_name")).thenReturn("Alex");
-        when(mockResultSet.getString("last_name")).thenReturn("Riddick");
+        when(mockResultSet.getString("first_name")).thenReturn("john");
+        when(mockResultSet.getString("last_name")).thenReturn("doe");
 
         PreparedStatement updateStmt = mock(PreparedStatement.class);
         when(mockConnection.prepareStatement(contains("UPDATE Users SET"))).thenReturn(updateStmt);
