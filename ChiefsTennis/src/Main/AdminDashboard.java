@@ -46,12 +46,12 @@ public class AdminDashboard extends JFrame {
     public AdminDashboard(User user, DatabaseConnection dbConnection) {
         this.currentUser = user;
 
-        // alex test
-        if (currentUser == null) {
-            System.out.println("CC-N");
-        } else {
-            System.out.println("CC-NOT-N");
-        }
+        // jacob test
+        // if (currentUser == null) {
+        // System.out.println("CC-N");
+        // } else {
+        // System.out.println("CC-NOT-N");
+        // }
 
         this.dbConnection = new DatabaseConnection();
 
@@ -318,11 +318,11 @@ public class AdminDashboard extends JFrame {
             }
         });
 
-        if (currentUser == null) {
-            System.out.println("C-NULL0");
-        } else {
-            System.out.println("C-NULL-N0");
-        }
+        // if (currentUser == null) {
+        // System.out.println("C-NULL0");
+        // } else {
+        // System.out.println("C-NULL-N0");
+        // }
 
         // Add member button
         addMemberButton.addActionListener(e -> {

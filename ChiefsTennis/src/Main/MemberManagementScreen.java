@@ -31,10 +31,10 @@ public class MemberManagementScreen extends JFrame {
         this.currentUser = currentUser;
         this.dbConnection = new DatabaseConnection();
 
-        System.out.println("T0");
-        if (currentUser == null) {
-            System.out.println("C-NULL");
-        }
+        // System.out.println("T0");
+        // if (currentUser == null) {
+        // System.out.println("C-NULL");
+        // }
         // System.out.println("S:" + s);
 
         isAdmin = "ADMIN".equals(this.currentUser.getRole());
@@ -264,9 +264,9 @@ public class MemberManagementScreen extends JFrame {
                 String email = rs.getString("email");
                 String phone = rs.getString("phone");
 
-                // alex test
+                // jacob test
 
-                System.out.println(rs.getString("join_date"));
+                // System.out.println(rs.getString("join_date"));
                 SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
                 Date joinDate = new Date();
                 try {

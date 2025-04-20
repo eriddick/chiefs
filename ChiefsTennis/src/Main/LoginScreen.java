@@ -170,12 +170,12 @@ public class LoginScreen extends JFrame {
         switch (user.getRole()) {
             case "ADMIN":
 
-                // alex test
-                if (user == null) {
-                    System.out.println("CCOD-N");
-                } else {
-                    System.out.println("CCOD-NOT-N");
-                }
+                // jacob test
+                // if (user == null) {
+                // System.out.println("CCOD-N");
+                // } else {
+                // System.out.println("CCOD-NOT-N");
+                // }
                 AdminDashboard adminDash = new AdminDashboard(user, dbConnection);
                 adminDash.setVisible(true);
                 break;
@@ -194,17 +194,18 @@ public class LoginScreen extends JFrame {
                         JOptionPane.ERROR_MESSAGE);
         }
     }
-    //For testing purposes
+
+    // For testing purposes
     public JTextField getUsernameField() {
-      return usernameField;
+        return usernameField;
     }
 
     public JPasswordField getPasswordField() {
-      return passwordField;
+        return passwordField;
     }
 
     public JButton getLoginButton() {
-      return loginButton;
+        return loginButton;
     }
 }
 

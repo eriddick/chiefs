@@ -10,6 +10,7 @@ import java.util.*;
 import java.util.Date;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 
 public class CourtReservationScreen extends JFrame {
@@ -658,9 +659,20 @@ public class CourtReservationScreen extends JFrame {
                 reservationStmt.setString(3, formattedDate);
 
                 Time startTime = new Time(selectedTime.getTime());
+
+                LocalDate localDateST = selectedDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                long lst = localDateST.atStartOfDay(ZoneOffset.systemDefault()).plusHours(startTime.getHours())
+                        .plusMinutes(startTime.getMinutes()).toInstant().toEpochMilli();
+                startTime = new Time(lst);
                 reservationStmt.setTime(4, startTime);
 
                 Time endTime = new Time(endCal.getTimeInMillis());
+
+                LocalDate localDateET = selectedDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
+                long let = localDateET.atStartOfDay(ZoneOffset.systemDefault()).plusHours(endTime.getHours())
+                        .plusMinutes(endTime.getMinutes()).toInstant().toEpochMilli();
+                endTime = new Time(let);
+
                 reservationStmt.setTime(5, endTime);
 
                 reservationStmt.setString(6, type);
