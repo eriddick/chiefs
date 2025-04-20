@@ -34,6 +34,7 @@ public class MemberDashboard extends JFrame {
     private JButton viewScheduleButton;
     private JButton viewBillsButton;
     private JButton updateProfileButton;
+    private JButton viewMemberListButton;
 
     public MemberDashboard(User user, DatabaseConnection dbConnection) {
         this.currentUser = user;
@@ -105,6 +106,7 @@ public class MemberDashboard extends JFrame {
         viewScheduleButton = new JButton("View Court Schedule");
         viewBillsButton = new JButton("View & Pay Bills");
         updateProfileButton = new JButton("Update Profile");
+        viewMemberListButton = new JButton("View Member List");
     }
 
     private void setupLayout() {
@@ -189,6 +191,7 @@ public class MemberDashboard extends JFrame {
         quickActionsPanel.add(viewScheduleButton);
         quickActionsPanel.add(viewBillsButton);
         quickActionsPanel.add(updateProfileButton);
+        quickActionsPanel.add(viewMemberListButton);
 
         topPanel.add(quickActionsPanel, gbc);
 
@@ -218,6 +221,10 @@ public class MemberDashboard extends JFrame {
         viewScheduleButton.addActionListener(e -> {
             CourtScheduleScreen scheduleScreen = new CourtScheduleScreen(currentUser);
             scheduleScreen.setVisible(true);
+        });
+
+        viewMemberListButton.addActionListener(e -> {
+            viewMemberlist();
         });
 
         viewBillsButton.addActionListener(e -> {
@@ -512,6 +519,59 @@ public class MemberDashboard extends JFrame {
                     "Database Error",
                     JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private ArrayList<String> getMemberList() {
+
+        ArrayList<String> memberlist = new ArrayList<>();
+
+        try {
+            Connection conn = dbConnection.getConnection();
+
+            StringBuilder queryBuilder = new StringBuilder();
+            queryBuilder.append("SELECT member_id, first_name, last_name ")
+                    .append("FROM Members WHERE 1=1 ")
+                    .append("AND status != 'INACTIVE' ")
+                    .append("ORDER BY last_name, first_name");
+
+            PreparedStatement stmt = conn.prepareStatement(queryBuilder.toString());
+
+            ResultSet rs = stmt.executeQuery();
+
+            memberlist.add("Member id  First Name  Last Name");
+
+            while (rs.next()) {
+                int memberId = rs.getInt("member_id");
+                String firstName = rs.getString("first_name");
+                String lastName = rs.getString("last_name");
+
+                memberlist.add(String.format("%15d %-12s %-20s", memberId, firstName.trim(), lastName.trim()));
+            }
+
+            rs.close();
+            stmt.close();
+            conn.close();
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Error loading members: " + ex.getMessage(),
+                    "Database Error",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+        return memberlist;
+    }
+
+    private void viewMemberlist() {
+        ArrayList<String> memberlist = getMemberList();
+        JFrame frame = new JFrame("MemberList");
+        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+        frame.setSize(300, 200); // adjust if necessarry
+        String[] stringArray = memberlist.toArray(new String[0]);
+        JList<String> list = new JList<>(stringArray);
+        JScrollPane scrollPane = new JScrollPane(list);
+        list.setVisibleRowCount(5);
+        frame.getContentPane().add(scrollPane);
+        frame.setVisible(true);
     }
 
     // Helper class for buttons in JTable

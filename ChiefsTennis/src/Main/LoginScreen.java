@@ -238,7 +238,7 @@ class User {
 
     public String getRole() {
         // test
-        System.out.println("Uid:" + userId + " mId:" + memberId + " r:" + role);
+        // System.out.println("Uid:" + userId + " mId:" + memberId + " r:" + role);
 
         return role;
     }
