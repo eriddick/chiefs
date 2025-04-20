@@ -529,8 +529,10 @@ public class MemberDashboard extends JFrame {
             Connection conn = dbConnection.getConnection();
 
             StringBuilder queryBuilder = new StringBuilder();
-            queryBuilder.append("SELECT member_id, first_name, last_name ")
-                    .append("FROM Members WHERE 1=1 ")
+            queryBuilder.append("SELECT Members.member_id, first_name, last_name ")
+                    .append("FROM Members, Users ")
+                    .append("WHERE Members.member_id = Users.member_id ")
+                    .append("AND Users.role = 'MEMBER' ")
                     .append("AND status != 'INACTIVE' ")
                     .append("ORDER BY last_name, first_name");
 
