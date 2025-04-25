@@ -205,9 +205,12 @@ public class BillingSystem extends JFrame {
         });
     }
     
+    // Replace the loadBills() method in BillingSystem.java with this SQLite-compatible version
+
+
     private void loadBills() {
         billsTableModel.setRowCount(0);
-        
+    
         try {
             Connection conn = dbConnection.getConnection();
             
@@ -218,12 +221,15 @@ public class BillingSystem extends JFrame {
                        .append("JOIN Members m ON b.member_id = m.member_id ")
                        .append("WHERE 1=1 ");
             
-            // Add filter condition
+            // Add filter condition - using filterComboBox which is likely the name in your code
+            // Adjust this variable name to match what's in your TreasurerDashboard or BillingSystem class
             String filter = (String) filterComboBox.getSelectedItem();
             if ("Unpaid Bills".equals(filter)) {
                 queryBuilder.append("AND b.is_paid = 0 ");
             } else if ("Paid Bills".equals(filter)) {
                 queryBuilder.append("AND b.is_paid = 1 ");
+            } else if ("Overdue Bills".equals(filter)) {
+                queryBuilder.append("AND b.is_paid = 0 AND b.due_date < date('now') ");
             }
             
             // Add search condition if search field is not empty
@@ -240,6 +246,8 @@ public class BillingSystem extends JFrame {
             // Add ordering
             queryBuilder.append("ORDER BY b.due_date DESC, m.last_name, m.first_name");
             
+            System.out.println("SQL Query: " + queryBuilder.toString());
+            
             PreparedStatement stmt = conn.prepareStatement(queryBuilder.toString());
             
             int paramIndex = 1;
@@ -249,191 +257,235 @@ public class BillingSystem extends JFrame {
                 String likePattern = "%" + searchTerm + "%";
                 stmt.setString(paramIndex++, likePattern);
                 stmt.setString(paramIndex++, likePattern);
+                System.out.println("Search pattern: " + likePattern);
             }
             
             // Set member ID parameter if not treasurer
             if (!isTreasurer) {
                 stmt.setInt(paramIndex++, currentUser.getMemberId());
+                System.out.println("Member ID filter: " + currentUser.getMemberId());
             }
             
             ResultSet rs = stmt.executeQuery();
             
             SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy");
+            int rowCount = 0;
             
             while (rs.next()) {
+                rowCount++;
                 int billId = rs.getInt("bill_id");
                 String firstName = rs.getString("first_name");
                 String lastName = rs.getString("last_name");
-                Date billDate = rs.getDate("bill_date");
-                BigDecimal totalAmount = rs.getBigDecimal("total_amount");
-                Date dueDate = rs.getDate("due_date");
+                
+                // Get date values (might be stored in different formats)
+                String billDateStr = rs.getString("bill_date");
+                String dueDateStr = rs.getString("due_date");
+                
+                // Format dates using our helper method
+                String formattedBillDate = DateUtils.formatSqliteDate(billDateStr);
+                String formattedDueDate = DateUtils.formatSqliteDate(dueDateStr);
+                
+                double totalAmount = rs.getDouble("total_amount");
                 boolean isPaid = rs.getBoolean("is_paid");
                 boolean sentEmail = rs.getBoolean("sent_email");
                 
                 billsTableModel.addRow(new Object[]{
                     billId,
                     firstName + " " + lastName,
-                    billDate != null ? dateFormat.format(billDate) : "",
+                    formattedBillDate,
                     String.format("$%.2f", totalAmount),
-                    dueDate != null ? dateFormat.format(dueDate) : "",
+                    formattedDueDate,
                     isPaid ? "Paid" : "Unpaid",
                     sentEmail ? "Yes" : "No"
                 });
             }
+            
+            System.out.println("Total bills found: " + rowCount);
             
             rs.close();
             stmt.close();
             conn.close();
             
         } catch (SQLException ex) {
+            ex.printStackTrace();
             JOptionPane.showMessageDialog(this, 
                 "Error loading bills: " + ex.getMessage(), 
                 "Database Error", 
                 JOptionPane.ERROR_MESSAGE);
-            ex.printStackTrace();
         }
+    }
+
+// Helper method to format SQLite date strings
+private String formatSqliteDate(String sqliteDate) {
+    if (sqliteDate == null || sqliteDate.isEmpty()) {
+        return "";
     }
     
-    private void generateAnnualBills() {
-        if (!isTreasurer) return;
+    try {
+        // Try to parse as ISO format (YYYY-MM-DD)
+        if (sqliteDate.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            String[] parts = sqliteDate.split("-");
+            return parts[1] + "/" + parts[2] + "/" + parts[0];
+        }
+        
+        // If it's a timestamp, try to extract the date part
+        if (sqliteDate.matches("\\d{4}-\\d{2}-\\d{2}.*")) {
+            String datePart = sqliteDate.substring(0, 10);
+            String[] parts = datePart.split("-");
+            return parts[1] + "/" + parts[2] + "/" + parts[0];
+        }
+        
+        // If all else fails, return as-is
+        return sqliteDate;
+    } catch (Exception e) {
+        System.out.println("Error formatting date: " + sqliteDate);
+        return sqliteDate;
+    }
+}
+    
+private void generateAnnualBills() {
+    try {
+        Connection conn = dbConnection.getConnection();
+        conn.setAutoCommit(false);
         
         try {
-            Connection conn = dbConnection.getConnection();
-            conn.setAutoCommit(false);
+            // Get current date
+            Calendar cal = Calendar.getInstance();
+            int currentMonth = cal.get(Calendar.MONTH) + 1; // 1-based month
+            int currentYear = cal.get(Calendar.YEAR);
             
-            try {
-                // Get current date
-                Calendar cal = Calendar.getInstance();
-                int currentMonth = cal.get(Calendar.MONTH) + 1; // 1-based month
-                int currentYear = cal.get(Calendar.YEAR);
-                
-                // Only allow generating annual bills in February
-                if (currentMonth != 2) {
-                    JOptionPane.showMessageDialog(this, 
-                        "Annual bills can only be generated in February.", 
-                        "Billing Error", 
-                        JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                
-                // Check if annual bills have already been generated this year
-                String checkQuery = "SELECT COUNT(*) FROM Bills WHERE YEAR(bill_date) = ? AND bill_date BETWEEN ? AND ?";
-                PreparedStatement checkStmt = conn.prepareStatement(checkQuery);
-                checkStmt.setInt(1, currentYear);
-                checkStmt.setDate(2, java.sql.Date.valueOf(currentYear + "-02-01"));
-                checkStmt.setDate(3, java.sql.Date.valueOf(currentYear + "-02-28"));
-                
-                ResultSet checkRs = checkStmt.executeQuery();
-                checkRs.next();
-                int billCount = checkRs.getInt(1);
-                
-                checkRs.close();
-                checkStmt.close();
-                
-                if (billCount > 0) {
-                    JOptionPane.showMessageDialog(this, 
-                        "Annual bills have already been generated for this year.", 
-                        "Billing Error", 
-                        JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                
-                // Get all active members
-                String memberQuery = "SELECT member_id FROM Members WHERE status = 'ACTIVE'";
-                Statement memberStmt = conn.createStatement();
-                ResultSet memberRs = memberStmt.executeQuery(memberQuery);
-                
-                int billsGenerated = 0;
-                
-                while (memberRs.next()) {
-                    int memberId = memberRs.getInt("member_id");
-                    
-                    // Create membership fee for current year
-                    String feeQuery = "INSERT INTO MembershipFees (member_id, fee_year, amount, due_date, is_paid) " +
-                                     "VALUES (?, ?, 400.00, ?, FALSE)";
-                    
-                    PreparedStatement feeStmt = conn.prepareStatement(feeQuery, Statement.RETURN_GENERATED_KEYS);
-                    feeStmt.setInt(1, memberId);
-                    feeStmt.setInt(2, currentYear);
-                    
-                    // Set due date to March 1st
-                    feeStmt.setDate(3, java.sql.Date.valueOf(currentYear + "-03-01"));
-                    
-                    feeStmt.executeUpdate();
-                    
-                    ResultSet feeKeys = feeStmt.getGeneratedKeys();
-                    if (feeKeys.next()) {
-                        int feeId = feeKeys.getInt(1);
-                        
-                        // Create bill
-                        String billQuery = "INSERT INTO Bills (member_id, bill_date, total_amount, due_date, is_paid, sent_email) " +
-                                         "VALUES (?, date('now'), 400.00, ?, FALSE, FALSE)";
-                        
-                        PreparedStatement billStmt = conn.prepareStatement(billQuery, Statement.RETURN_GENERATED_KEYS);
-                        billStmt.setInt(1, memberId);
-                        billStmt.setDate(2, java.sql.Date.valueOf(currentYear + "-03-01"));
-                        
-                        billStmt.executeUpdate();
-                        
-                        ResultSet billKeys = billStmt.getGeneratedKeys();
-                        if (billKeys.next()) {
-                            int billId = billKeys.getInt(1);
-                            
-                            // Add bill item for membership fee
-                            String itemQuery = "INSERT INTO BillItems (bill_id, description, amount, item_type, reference_id) " +
-                                             "VALUES (?, ?, 400.00, 'MEMBERSHIP_FEE', ?)";
-                            
-                            PreparedStatement itemStmt = conn.prepareStatement(itemQuery);
-                            itemStmt.setInt(1, billId);
-                            itemStmt.setString(2, "Annual Membership Fee " + currentYear);
-                            itemStmt.setInt(3, feeId);
-                            
-                            itemStmt.executeUpdate();
-                            itemStmt.close();
-                            
-                            billsGenerated++;
-                        }
-                        
-                        billKeys.close();
-                        billStmt.close();
-                    }
-                    
-                    feeKeys.close();
-                    feeStmt.close();
-                }
-                
-                memberRs.close();
-                memberStmt.close();
-                
-                conn.commit();
-                
+            // Remove month restriction for testing
+            /* 
+            // Only allow generating annual bills in February
+            if (currentMonth != 2) {
                 JOptionPane.showMessageDialog(this, 
-                    "Generated " + billsGenerated + " annual bills.", 
-                    "Bills Generated", 
-                    JOptionPane.INFORMATION_MESSAGE);
-                
-                // Refresh the bills table
-                loadBills();
-                
-            } catch (SQLException ex) {
-                conn.rollback();
+                    "Annual bills can only be generated in February.", 
+                    "Billing Error", 
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            */
+            
+            // Check if annual bills have already been generated this year
+            String checkQuery = "SELECT COUNT(*) FROM Bills " +
+                               "WHERE strftime('%Y', bill_date) = ? " + 
+                               "AND strftime('%m', bill_date) BETWEEN '01' AND '12'";
+            
+            PreparedStatement checkStmt = conn.prepareStatement(checkQuery);
+            checkStmt.setString(1, String.valueOf(currentYear));
+            
+            ResultSet checkRs = checkStmt.executeQuery();
+            checkRs.next();
+            int billCount = checkRs.getInt(1);
+            
+            checkRs.close();
+            checkStmt.close();
+            
+            if (billCount > 0) {
                 JOptionPane.showMessageDialog(this, 
-                    "Error generating annual bills: " + ex.getMessage(), 
-                    "Database Error", 
-                    JOptionPane.ERROR_MESSAGE);
-                ex.printStackTrace();
-            } finally {
-                conn.setAutoCommit(true);
-                conn.close();
+                    "Annual bills have already been generated for this year.", 
+                    "Billing Error", 
+                    JOptionPane.WARNING_MESSAGE);
+                return;
             }
             
-        } catch (SQLException ex) {
+            // Get all active members
+            String memberQuery = "SELECT member_id FROM Members WHERE status = 'ACTIVE'";
+            Statement memberStmt = conn.createStatement();
+            ResultSet memberRs = memberStmt.executeQuery(memberQuery);
+            
+            int billsGenerated = 0;
+            
+            while (memberRs.next()) {
+                int memberId = memberRs.getInt("member_id");
+                
+                // Set due date to 30 days from now 
+                String dueDate = DateUtils.addDaysForSQLite(new Date(), 30);
+                
+                // Create membership fee for current year
+                String feeQuery = "INSERT INTO MembershipFees (member_id, fee_year, amount, due_date, is_paid) " +
+                                 "VALUES (?, ?, 400.00, ?, 0)";
+                
+                PreparedStatement feeStmt = conn.prepareStatement(feeQuery, Statement.RETURN_GENERATED_KEYS);
+                feeStmt.setInt(1, memberId);
+                feeStmt.setInt(2, currentYear);
+                feeStmt.setString(3, dueDate);
+                
+                feeStmt.executeUpdate();
+                
+                ResultSet feeKeys = feeStmt.getGeneratedKeys();
+                if (feeKeys.next()) {
+                    int feeId = feeKeys.getInt(1);
+                    
+                    // Create bill
+                    String billQuery = "INSERT INTO Bills (member_id, bill_date, total_amount, due_date, is_paid, sent_email) " +
+                                     "VALUES (?, date('now'), 400.00, ?, 0, 0)";
+                    
+                    PreparedStatement billStmt = conn.prepareStatement(billQuery, Statement.RETURN_GENERATED_KEYS);
+                    billStmt.setInt(1, memberId);
+                    billStmt.setString(2, dueDate);
+                    
+                    billStmt.executeUpdate();
+                    
+                    ResultSet billKeys = billStmt.getGeneratedKeys();
+                    if (billKeys.next()) {
+                        int billId = billKeys.getInt(1);
+                        
+                        // Add bill item for membership fee
+                        String itemQuery = "INSERT INTO BillItems (bill_id, description, amount, item_type, reference_id) " +
+                                         "VALUES (?, ?, 400.00, 'MEMBERSHIP_FEE', ?)";
+                        
+                        PreparedStatement itemStmt = conn.prepareStatement(itemQuery);
+                        itemStmt.setInt(1, billId);
+                        itemStmt.setString(2, "Annual Membership Fee " + currentYear);
+                        itemStmt.setInt(3, feeId);
+                        
+                        itemStmt.executeUpdate();
+                        itemStmt.close();
+                        
+                        billsGenerated++;
+                    }
+                    
+                    billKeys.close();
+                    billStmt.close();
+                }
+                
+                feeKeys.close();
+                feeStmt.close();
+            }
+            
+            memberRs.close();
+            memberStmt.close();
+            
+            conn.commit();
+            
             JOptionPane.showMessageDialog(this, 
-                "Error connecting to database: " + ex.getMessage(), 
+                "Generated " + billsGenerated + " annual bills.", 
+                "Bills Generated", 
+                JOptionPane.INFORMATION_MESSAGE);
+            
+            // Refresh the bills table
+            loadBills();
+            
+        } catch (SQLException ex) {
+            conn.rollback();
+            JOptionPane.showMessageDialog(this, 
+                "Error generating annual bills: " + ex.getMessage(), 
                 "Database Error", 
                 JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
+        } finally {
+            conn.setAutoCommit(true);
+            conn.close();
         }
+        
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, 
+            "Error connecting to database: " + ex.getMessage(), 
+            "Database Error", 
+            JOptionPane.ERROR_MESSAGE);
     }
+}
     
     private void sendBillReminder(int billId) {
         if (!isTreasurer) return;

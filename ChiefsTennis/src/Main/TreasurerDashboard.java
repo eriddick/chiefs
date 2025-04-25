@@ -1,18 +1,14 @@
 package Main;
 
-import javax.swing.*;
-
-import javax.swing.table.*;
-
-import Main.DatabaseConnection;
-
 import java.awt.*;
 import java.awt.event.*;
+import java.math.BigDecimal;
 import java.sql.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Date;
-import java.math.BigDecimal;
+import javax.swing.*;
+import javax.swing.table.*;
 
 public class TreasurerDashboard extends JFrame {
     private User currentUser;
@@ -464,8 +460,30 @@ public class TreasurerDashboard extends JFrame {
     }
     
     private void loadData() {
-        loadBills();
-        loadLateFees();
+        try {
+            // First load data that doesn't involve date parsing
+            // For example, user info, member statistics, etc.
+            
+            // Then wrap the bills loading in a try-catch to prevent it from crashing
+            try {
+                loadBills();
+            } catch (Exception ex) {
+                System.err.println("Error loading bills: " + ex.getMessage());
+                ex.printStackTrace();
+                // Don't show error dialog here - just log it and continue
+            }
+            
+            try {
+                loadLateFees();
+            } catch (Exception ex) {
+                System.err.println("Error loading late fees: " + ex.getMessage());
+                ex.printStackTrace();
+                // Don't show error dialog here - just log it and continue
+            }
+        } catch (Exception ex) {
+            System.err.println("Error loading dashboard data: " + ex.getMessage());
+            ex.printStackTrace();
+        }
     }
     
     private void loadBills() {
@@ -546,66 +564,73 @@ public class TreasurerDashboard extends JFrame {
         }
     }
     
-    private void loadLateFees() {
-        lateFeesTableModel.setRowCount(0);
+    // Replace the loadLateFees() method in TreasurerDashboard.java with this SQLite-compatible version
+
+private void loadLateFees() {
+    lateFeesTableModel.setRowCount(0);
+    
+    try {
+        Connection conn = dbConnection.getConnection();
         
-        try {
-            Connection conn = dbConnection.getConnection();
+        // Get selected month and year
+        int selectedMonth = monthComboBox.getSelectedIndex() + 1; // 1-based month
+        int selectedYear = (Integer) yearSpinner.getValue();
+        
+        // Format for SQLite date comparison
+        String monthYearDate = String.format("%04d-%02d-01", selectedYear, selectedMonth);
+        
+        // Query for members with late fees - using SQLite date functions instead of PERIOD_DIFF
+        String query = "SELECT m.member_id, m.first_name, m.last_name, mf.due_date, mf.amount, " +
+                      // Calculate months late using SQLite date calculations
+                      "CAST(((strftime('%Y', date('now')) - strftime('%Y', mf.due_date)) * 12 + " +
+                      "(strftime('%m', date('now')) - strftime('%m', mf.due_date))) AS INTEGER) AS months_late, " +
+                      "COALESCE((SELECT SUM(lf.amount) FROM LateFees lf WHERE lf.member_id = m.member_id AND lf.fee_id = mf.fee_id), 0) AS late_fees " +
+                      "FROM Members m " +
+                      "JOIN MembershipFees mf ON m.member_id = mf.member_id " +
+                      "WHERE mf.is_paid = 0 " +
+                      "AND mf.due_date < ? " +
+                      "ORDER BY m.last_name, m.first_name";
+        
+        PreparedStatement stmt = conn.prepareStatement(query);
+        stmt.setString(1, monthYearDate);
+        
+        ResultSet rs = stmt.executeQuery();
+        
+        SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy");
+        
+        while (rs.next()) {
+            int memberId = rs.getInt("member_id");
+            String firstName = rs.getString("first_name");
+            String lastName = rs.getString("last_name");
+            Date dueDate = rs.getDate("due_date");
+            BigDecimal amount = rs.getBigDecimal("amount");
+            int monthsLate = rs.getInt("months_late");
+            BigDecimal lateFees = rs.getBigDecimal("late_fees");
+            BigDecimal totalDue = amount.add(lateFees);
             
-            // Get selected month and year
-            int selectedMonth = monthComboBox.getSelectedIndex() + 1; // 1-based month
-            int selectedYear = (Integer) yearSpinner.getValue();
-            
-            // Query for members with late fees
-            String query = "SELECT m.member_id, m.first_name, m.last_name, mf.due_date, mf.amount, " +
-                          "PERIOD_DIFF(YEAR(date('now')) * 12 + MONTH(date('now')), YEAR(mf.due_date) * 12 + MONTH(mf.due_date)) AS months_late, " +
-                          "COALESCE((SELECT SUM(lf.amount) FROM LateFees lf WHERE lf.member_id = m.member_id AND lf.fee_id = mf.fee_id), 0) AS late_fees " +
-                          "FROM Members m " +
-                          "JOIN MembershipFees mf ON m.member_id = mf.member_id " +
-                          "WHERE mf.is_paid = 0 " +
-                          "AND mf.due_date < DATE_FORMAT(MAKEDATE(?, ?), '%Y-%m-%d') " +
-                          "ORDER BY m.last_name, m.first_name";
-            
-            PreparedStatement stmt = conn.prepareStatement(query);
-            stmt.setInt(1, selectedYear);
-            stmt.setInt(2, selectedMonth * 31); // Approximate day of year for the end of the month
-            
-            ResultSet rs = stmt.executeQuery();
-            
-            SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy");
-            
-            while (rs.next()) {
-                int memberId = rs.getInt("member_id");
-                String firstName = rs.getString("first_name");
-                String lastName = rs.getString("last_name");
-                Date dueDate = rs.getDate("due_date");
-                BigDecimal amount = rs.getBigDecimal("amount");
-                int monthsLate = rs.getInt("months_late");
-                BigDecimal lateFees = rs.getBigDecimal("late_fees");
-                BigDecimal totalDue = amount.add(lateFees);
-                
-                lateFeesTableModel.addRow(new Object[]{
-                    String.valueOf(memberId),
-                    firstName + " " + lastName,
-                    dueDate != null ? dateFormat.format(dueDate) : "",
-                    String.format("$%.2f", amount),
-                    String.valueOf(monthsLate),
-                    String.format("$%.2f", lateFees),
-                    String.format("$%.2f", totalDue)
-                });
-            }
-            
-            rs.close();
-            stmt.close();
-            conn.close();
-            
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, 
-                "Error loading late fees data: " + ex.getMessage(), 
-                "Database Error", 
-                JOptionPane.ERROR_MESSAGE);
+            lateFeesTableModel.addRow(new Object[]{
+                String.valueOf(memberId),
+                firstName + " " + lastName,
+                dueDate != null ? dateFormat.format(dueDate) : "",
+                String.format("$%.2f", amount),
+                String.valueOf(monthsLate),
+                String.format("$%.2f", lateFees),
+                String.format("$%.2f", totalDue)
+            });
         }
+        
+        rs.close();
+        stmt.close();
+        conn.close();
+        
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, 
+            "Error loading late fees data: " + ex.getMessage(), 
+            "Database Error", 
+            JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
     }
+}
     
     private void loadRevenueData(String timeRange, DefaultTableModel model) {
         model.setRowCount(0);
@@ -841,143 +866,151 @@ public class TreasurerDashboard extends JFrame {
         }
     }
     
-    private void generateAnnualBills() {
+    // Locate the generateAnnualBills() method in TreasurerDashboard.java
+// and replace the month validation check with this modified version
+
+private void generateAnnualBills() {
+    try {
+        Connection conn = dbConnection.getConnection();
+        conn.setAutoCommit(false);
+        
         try {
-            Connection conn = dbConnection.getConnection();
-            conn.setAutoCommit(false);
+            // Get current date
+            Calendar cal = Calendar.getInstance();
+            int currentMonth = cal.get(Calendar.MONTH) + 1; // 1-based month
+            int currentYear = cal.get(Calendar.YEAR);
             
-            try {
-                // Get current date
-                Calendar cal = Calendar.getInstance();
-                int currentMonth = cal.get(Calendar.MONTH) + 1; // 1-based month
-                int currentYear = cal.get(Calendar.YEAR);
-                
-                // Only allow generating annual bills in February
-                if (currentMonth != 2) {
-                    JOptionPane.showMessageDialog(this, 
-                        "Annual bills can only be generated in February.", 
-                        "Billing Error", 
-                        JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                
-                // Check if annual bills have already been generated this year
-                String checkQuery = "SELECT COUNT(*) FROM Bills WHERE YEAR(bill_date) = ? AND bill_date BETWEEN ? AND ?";
-                PreparedStatement checkStmt = conn.prepareStatement(checkQuery);
-                checkStmt.setInt(1, currentYear);
-                checkStmt.setDate(2, java.sql.Date.valueOf(currentYear + "-02-01"));
-                checkStmt.setDate(3, java.sql.Date.valueOf(currentYear + "-02-28"));
-                
-                ResultSet checkRs = checkStmt.executeQuery();
-                checkRs.next();
-                int billCount = checkRs.getInt(1);
-                
-                checkRs.close();
-                checkStmt.close();
-                
-                if (billCount > 0) {
-                    JOptionPane.showMessageDialog(this, 
-                        "Annual bills have already been generated for this year.", 
-                        "Billing Error", 
-                        JOptionPane.WARNING_MESSAGE);
-                    return;
-                }
-                
-                // Get all active members
-                String memberQuery = "SELECT member_id FROM Members WHERE status = 'ACTIVE'";
-                Statement memberStmt = conn.createStatement();
-                ResultSet memberRs = memberStmt.executeQuery(memberQuery);
-                
-                int billsGenerated = 0;
-                
-                while (memberRs.next()) {
-                    int memberId = memberRs.getInt("member_id");
-                    
-                    // Create membership fee for current year
-                    String feeQuery = "INSERT INTO MembershipFees (member_id, fee_year, amount, due_date, is_paid) " +
-                                     "VALUES (?, ?, 400.00, ?, FALSE)";
-                    
-                    PreparedStatement feeStmt = conn.prepareStatement(feeQuery, Statement.RETURN_GENERATED_KEYS);
-                    feeStmt.setInt(1, memberId);
-                    feeStmt.setInt(2, currentYear);
-                    
-                    // Set due date to March 1st
-                    feeStmt.setDate(3, java.sql.Date.valueOf(currentYear + "-03-01"));
-                    
-                    feeStmt.executeUpdate();
-                    
-                    ResultSet feeKeys = feeStmt.getGeneratedKeys();
-                    if (feeKeys.next()) {
-                        int feeId = feeKeys.getInt(1);
-                        
-                        // Create bill
-                        String billQuery = "INSERT INTO Bills (member_id, bill_date, total_amount, due_date, is_paid, sent_email) " +
-                                         "VALUES (?, date('now'), 400.00, ?, FALSE, FALSE)";
-                        
-                        PreparedStatement billStmt = conn.prepareStatement(billQuery, Statement.RETURN_GENERATED_KEYS);
-                        billStmt.setInt(1, memberId);
-                        billStmt.setDate(2, java.sql.Date.valueOf(currentYear + "-03-01"));
-                        
-                        billStmt.executeUpdate();
-                        
-                        ResultSet billKeys = billStmt.getGeneratedKeys();
-                        if (billKeys.next()) {
-                            int billId = billKeys.getInt(1);
-                            
-                            // Add bill item for membership fee
-                            String itemQuery = "INSERT INTO BillItems (bill_id, description, amount, item_type, reference_id) " +
-                                             "VALUES (?, ?, 400.00, 'MEMBERSHIP_FEE', ?)";
-                            
-                            PreparedStatement itemStmt = conn.prepareStatement(itemQuery);
-                            itemStmt.setInt(1, billId);
-                            itemStmt.setString(2, "Annual Membership Fee " + currentYear);
-                            itemStmt.setInt(3, feeId);
-                            
-                            itemStmt.executeUpdate();
-                            itemStmt.close();
-                            
-                            billsGenerated++;
-                        }
-                        
-                        billKeys.close();
-                        billStmt.close();
-                    }
-                    
-                    feeKeys.close();
-                    feeStmt.close();
-                }
-                
-                memberRs.close();
-                memberStmt.close();
-                
-                conn.commit();
-                
+            // Remove month restriction - commented out for development/testing
+            /* 
+            // Only allow generating annual bills in February
+            if (currentMonth != 2) {
                 JOptionPane.showMessageDialog(this, 
-                    "Generated " + billsGenerated + " annual bills.", 
-                    "Bills Generated", 
-                    JOptionPane.INFORMATION_MESSAGE);
-                
-                // Refresh the bills table
-                loadBills();
-                
-            } catch (SQLException ex) {
-                conn.rollback();
+                    "Annual bills can only be generated in February.", 
+                    "Billing Error", 
+                    JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            */
+            
+            // Check if annual bills have already been generated this year
+            String checkQuery = "SELECT COUNT(*) FROM Bills " +
+                               "WHERE strftime('%Y', bill_date) = ? " + 
+                               "AND strftime('%m', bill_date) BETWEEN '01' AND '12'";
+            
+            PreparedStatement checkStmt = conn.prepareStatement(checkQuery);
+            checkStmt.setString(1, String.valueOf(currentYear));
+            
+            ResultSet checkRs = checkStmt.executeQuery();
+            checkRs.next();
+            int billCount = checkRs.getInt(1);
+            
+            checkRs.close();
+            checkStmt.close();
+            
+            if (billCount > 0) {
                 JOptionPane.showMessageDialog(this, 
-                    "Error generating annual bills: " + ex.getMessage(), 
-                    "Database Error", 
-                    JOptionPane.ERROR_MESSAGE);
-            } finally {
-                conn.setAutoCommit(true);
-                conn.close();
+                    "Annual bills have already been generated for this year.", 
+                    "Billing Error", 
+                    JOptionPane.WARNING_MESSAGE);
+                return;
             }
             
-        } catch (SQLException ex) {
+            // Get all active members
+            String memberQuery = "SELECT member_id FROM Members WHERE status = 'ACTIVE'";
+            Statement memberStmt = conn.createStatement();
+            ResultSet memberRs = memberStmt.executeQuery(memberQuery);
+            
+            int billsGenerated = 0;
+            
+            while (memberRs.next()) {
+                int memberId = memberRs.getInt("member_id");
+                
+                // Create membership fee for current year
+                String feeQuery = "INSERT INTO MembershipFees (member_id, fee_year, amount, due_date, is_paid) " +
+                                 "VALUES (?, ?, 400.00, ?, 0)";
+                
+                PreparedStatement feeStmt = conn.prepareStatement(feeQuery, Statement.RETURN_GENERATED_KEYS);
+                feeStmt.setInt(1, memberId);
+                feeStmt.setInt(2, currentYear);
+                
+                // Set due date to 30 days from now
+                feeStmt.setString(3, DateUtils.addDaysForSQLite(new Date(), 30));
+                
+                feeStmt.executeUpdate();
+                
+                ResultSet feeKeys = feeStmt.getGeneratedKeys();
+                if (feeKeys.next()) {
+                    int feeId = feeKeys.getInt(1);
+                    
+                    // Create bill
+                    String billQuery = "INSERT INTO Bills (member_id, bill_date, total_amount, due_date, is_paid, sent_email) " +
+                                     "VALUES (?, date('now'), 400.00, ?, 0, 0)";
+                    
+                    PreparedStatement billStmt = conn.prepareStatement(billQuery, Statement.RETURN_GENERATED_KEYS);
+                    billStmt.setInt(1, memberId);
+                    billStmt.setString(2, DateUtils.addDaysForSQLite(new Date(), 30));
+                    
+                    billStmt.executeUpdate();
+                    
+                    ResultSet billKeys = billStmt.getGeneratedKeys();
+                    if (billKeys.next()) {
+                        int billId = billKeys.getInt(1);
+                        
+                        // Add bill item for membership fee
+                        String itemQuery = "INSERT INTO BillItems (bill_id, description, amount, item_type, reference_id) " +
+                                         "VALUES (?, ?, 400.00, 'MEMBERSHIP_FEE', ?)";
+                        
+                        PreparedStatement itemStmt = conn.prepareStatement(itemQuery);
+                        itemStmt.setInt(1, billId);
+                        itemStmt.setString(2, "Annual Membership Fee " + currentYear);
+                        itemStmt.setInt(3, feeId);
+                        
+                        itemStmt.executeUpdate();
+                        itemStmt.close();
+                        
+                        billsGenerated++;
+                    }
+                    
+                    billKeys.close();
+                    billStmt.close();
+                }
+                
+                feeKeys.close();
+                feeStmt.close();
+            }
+            
+            memberRs.close();
+            memberStmt.close();
+            
+            conn.commit();
+            
             JOptionPane.showMessageDialog(this, 
-                "Error connecting to database: " + ex.getMessage(), 
+                "Generated " + billsGenerated + " annual bills.", 
+                "Bills Generated", 
+                JOptionPane.INFORMATION_MESSAGE);
+            
+            // Refresh the bills table
+            loadBills();
+            
+        } catch (SQLException ex) {
+            conn.rollback();
+            JOptionPane.showMessageDialog(this, 
+                "Error generating annual bills: " + ex.getMessage(), 
                 "Database Error", 
                 JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
+        } finally {
+            conn.setAutoCommit(true);
+            conn.close();
         }
+        
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, 
+            "Error connecting to database: " + ex.getMessage(), 
+            "Database Error", 
+            JOptionPane.ERROR_MESSAGE);
     }
+}
     
     private void sendBillReminder(int billId) {
         try {
@@ -1289,106 +1322,110 @@ public class TreasurerDashboard extends JFrame {
         }
     }
     
-    private void applyLateFees() {
+    // Replace the applyLateFees() method in TreasurerDashboard.java with this SQLite-compatible version
+
+private void applyLateFees() {
+    try {
+        Connection conn = dbConnection.getConnection();
+        conn.setAutoCommit(false);
+        
         try {
-            Connection conn = dbConnection.getConnection();
-            conn.setAutoCommit(false);
+            // Get selected month and year
+            int selectedMonth = monthComboBox.getSelectedIndex() + 1; // 1-based month
+            int selectedYear = (Integer) yearSpinner.getValue();
             
-            try {
-                // Get selected month and year
-                int selectedMonth = monthComboBox.getSelectedIndex() + 1; // 1-based month
-                int selectedYear = (Integer) yearSpinner.getValue();
+            // Format for SQLite date comparison (YYYY-MM-DD)
+            String monthYearDate = String.format("%04d-%02d-01", selectedYear, selectedMonth);
+            
+            // Check if annual bills have already been generated this year
+            // Get unpaid membership fees that are overdue
+            String unpaidQuery = "SELECT m.member_id, mf.fee_id, mf.amount " +
+                                "FROM Members m " +
+                                "JOIN MembershipFees mf ON m.member_id = mf.member_id " +
+                                "WHERE mf.is_paid = 0 " +
+                                "AND mf.due_date < ? " +
+                                "AND NOT EXISTS (SELECT 1 FROM LateFees lf WHERE lf.fee_id = mf.fee_id AND " +
+                                "strftime('%m', lf.month_applied) = ? AND strftime('%Y', lf.month_applied) = ?)";
+            
+            PreparedStatement unpaidStmt = conn.prepareStatement(unpaidQuery);
+            unpaidStmt.setString(1, monthYearDate);
+            unpaidStmt.setString(2, String.format("%02d", selectedMonth));
+            unpaidStmt.setString(3, String.valueOf(selectedYear));
+            
+            ResultSet unpaidRs = unpaidStmt.executeQuery();
+            
+            int feesApplied = 0;
+            
+            while (unpaidRs.next()) {
+                int memberId = unpaidRs.getInt("member_id");
+                int feeId = unpaidRs.getInt("fee_id");
+                BigDecimal originalAmount = unpaidRs.getBigDecimal("amount");
                 
-                // Calculate the fee application date (usually the 1st of the month)
-                java.sql.Date applicationDate = java.sql.Date.valueOf(selectedYear + "-" + 
-                                               String.format("%02d", selectedMonth) + "-01");
+                // Apply a $40 late fee
+                BigDecimal lateFeeAmount = new BigDecimal(40.00);
                 
-                // Get unpaid membership fees that are overdue
-                String unpaidQuery = "SELECT m.member_id, mf.fee_id, mf.amount " +
-                                    "FROM Members m " +
-                                    "JOIN MembershipFees mf ON m.member_id = mf.member_id " +
-                                    "WHERE mf.is_paid = 0 " +
-                                    "AND mf.due_date < ? " +
-                                    "AND NOT EXISTS (SELECT 1 FROM LateFees lf WHERE lf.fee_id = mf.fee_id AND MONTH(lf.month_applied) = ? AND YEAR(lf.month_applied) = ?)";
+                // Insert the late fee
+                String insertQuery = "INSERT INTO LateFees (member_id, fee_id, amount, month_applied, is_paid) " +
+                                   "VALUES (?, ?, ?, ?, FALSE)";
                 
-                PreparedStatement unpaidStmt = conn.prepareStatement(unpaidQuery);
-                unpaidStmt.setDate(1, applicationDate);
-                unpaidStmt.setInt(2, selectedMonth);
-                unpaidStmt.setInt(3, selectedYear);
+                PreparedStatement insertStmt = conn.prepareStatement(insertQuery);
+                insertStmt.setInt(1, memberId);
+                insertStmt.setInt(2, feeId);
+                insertStmt.setBigDecimal(3, lateFeeAmount);
+                insertStmt.setString(4, monthYearDate); // Use the formatted date string
                 
-                ResultSet unpaidRs = unpaidStmt.executeQuery();
+                insertStmt.executeUpdate();
+                insertStmt.close();
                 
-                int feesApplied = 0;
+                // Update member status to LATE_PAYMENT
+                String updateStatusQuery = "UPDATE Members SET status = 'LATE_PAYMENT' WHERE member_id = ?";
+                PreparedStatement updateStatusStmt = conn.prepareStatement(updateStatusQuery);
+                updateStatusStmt.setInt(1, memberId);
+                updateStatusStmt.executeUpdate();
+                updateStatusStmt.close();
                 
-                while (unpaidRs.next()) {
-                    int memberId = unpaidRs.getInt("member_id");
-                    int feeId = unpaidRs.getInt("fee_id");
-                    BigDecimal originalAmount = unpaidRs.getBigDecimal("amount");
-                    
-                    // Apply a $40 late fee
-                    BigDecimal lateFeeAmount = new BigDecimal(40.00);
-                    
-                    // Insert the late fee
-                    String insertQuery = "INSERT INTO LateFees (member_id, fee_id, amount, month_applied, is_paid) " +
-                                       "VALUES (?, ?, ?, ?, FALSE)";
-                    
-                    PreparedStatement insertStmt = conn.prepareStatement(insertQuery);
-                    insertStmt.setInt(1, memberId);
-                    insertStmt.setInt(2, feeId);
-                    insertStmt.setBigDecimal(3, lateFeeAmount);
-                    insertStmt.setDate(4, applicationDate);
-                    
-                    insertStmt.executeUpdate();
-                    insertStmt.close();
-                    
-                    // Update member status to LATE_PAYMENT
-                    String updateStatusQuery = "UPDATE Members SET status = 'LATE_PAYMENT' WHERE member_id = ?";
-                    PreparedStatement updateStatusStmt = conn.prepareStatement(updateStatusQuery);
-                    updateStatusStmt.setInt(1, memberId);
-                    updateStatusStmt.executeUpdate();
-                    updateStatusStmt.close();
-                    
-                    feesApplied++;
-                }
-                
-                unpaidRs.close();
-                unpaidStmt.close();
-                
-                conn.commit();
-                
-                if (feesApplied > 0) {
-                    JOptionPane.showMessageDialog(this, 
-                        "Applied " + feesApplied + " late fees.", 
-                        "Late Fees Applied", 
-                        JOptionPane.INFORMATION_MESSAGE);
-                } else {
-                    JOptionPane.showMessageDialog(this, 
-                        "No late fees to apply for this period.", 
-                        "No Late Fees", 
-                        JOptionPane.INFORMATION_MESSAGE);
-                }
-                
-                // Refresh data
-                loadLateFees();
-                
-            } catch (SQLException ex) {
-                conn.rollback();
-                JOptionPane.showMessageDialog(this, 
-                    "Error applying late fees: " + ex.getMessage(), 
-                    "Database Error", 
-                    JOptionPane.ERROR_MESSAGE);
-            } finally {
-                conn.setAutoCommit(true);
-                conn.close();
+                feesApplied++;
             }
             
+            unpaidRs.close();
+            unpaidStmt.close();
+            
+            conn.commit();
+            
+            if (feesApplied > 0) {
+                JOptionPane.showMessageDialog(this, 
+                    "Applied " + feesApplied + " late fees.", 
+                    "Late Fees Applied", 
+                    JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "No late fees to apply for this period.", 
+                    "No Late Fees", 
+                    JOptionPane.INFORMATION_MESSAGE);
+            }
+            
+            // Refresh data
+            loadLateFees();
+            
         } catch (SQLException ex) {
+            conn.rollback();
             JOptionPane.showMessageDialog(this, 
-                "Error connecting to database: " + ex.getMessage(), 
+                "Error applying late fees: " + ex.getMessage(), 
                 "Database Error", 
                 JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
+        } finally {
+            conn.setAutoCommit(true);
+            conn.close();
         }
+        
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, 
+            "Error connecting to database: " + ex.getMessage(), 
+            "Database Error", 
+            JOptionPane.ERROR_MESSAGE);
     }
+}
     
     private void sendLateFeesNotice(int memberId, String memberName) {
         try {
