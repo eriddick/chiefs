@@ -506,11 +506,11 @@ public class AdminDashboard extends JFrame {
                 // Parse and format the date if it's not null
                 // String formattedDate = "";
                 // if (joinDate != null && !joinDate.isEmpty()) {
-                //     try {
-                //         formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(joinDate));
-                //     } catch (Exception e) {
-                //         formattedDate = joinDate; // Use as-is if parsing fails
-                //     }
+                // try {
+                // formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(joinDate));
+                // } catch (Exception e) {
+                // formattedDate = joinDate; // Use as-is if parsing fails
+                // }
                 // }
 
                 memberTableModel.addRow(new Object[] {
@@ -519,7 +519,7 @@ public class AdminDashboard extends JFrame {
                         lastName,
                         email,
                         phone,
-                     //   formattedDate,
+                        // formattedDate,
                         status
                 });
             }
@@ -614,39 +614,47 @@ public class AdminDashboard extends JFrame {
 
                 // Format the date and times
                 String formattedDate = "";
-                String formattedTimeRange = "";
+                // String formattedTimeRange = "";
                 String formattedCreatedAt = "";
 
+                // Use the TimeParser utility to safely parse and format times
+                String formattedStartTime = TimeParser.parseTimeToDisplay(startTime);
+                String formattedEndTime = TimeParser.parseTimeToDisplay(endTime);
+                String formattedTimeRange = formattedStartTime + " - " + formattedEndTime;
+
                 // try {
-                //     if (reservationDate != null) {
-                //         formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(reservationDate));
-                //     }
+                // if (reservationDate != null) {
+                // formattedDate =
+                // dateFormat.format(DateUtils.parseSQLiteDate(reservationDate));
+                // }
 
-                //     if (startTime != null && endTime != null) {
-                //         Date startTimeDate = DateUtils.parseSQLiteTime(startTime);
-                //         Date endTimeDate = DateUtils.parseSQLiteTime(endTime);
-                //         formattedTimeRange = timeFormat.format(startTimeDate) + " - " + timeFormat.format(endTimeDate);
-                //     }
+                // if (startTime != null && endTime != null) {
+                // Date startTimeDate = DateUtils.parseSQLiteTime(startTime);
+                // Date endTimeDate = DateUtils.parseSQLiteTime(endTime);
+                // formattedTimeRange = timeFormat.format(startTimeDate) + " - " +
+                // timeFormat.format(endTimeDate);
+                // }
 
-                //     if (createdAt != null) {
-                //         formattedCreatedAt = createdFormat.format(DateUtils.parseSQLiteDateTime(createdAt));
-                //     }
+                // if (createdAt != null) {
+                // formattedCreatedAt =
+                // createdFormat.format(DateUtils.parseSQLiteDateTime(createdAt));
+                // }
                 // } catch (Exception e) {
-                //     // Use raw values if parsing fails
-                //     formattedDate = reservationDate;
-                //     formattedTimeRange = startTime + " - " + endTime;
-                //     formattedCreatedAt = createdAt;
+                // // Use raw values if parsing fails
+                // formattedDate = reservationDate;
+                // formattedTimeRange = startTime + " - " + endTime;
+                // formattedCreatedAt = createdAt;
                 // }
 
                 reservationTableModel.addRow(new Object[] {
                         reservationId,
                         "Court " + courtNumber,
                         firstName + " " + lastName,
-                        formattedDate,
+                        reservationDate,
                         formattedTimeRange,
                         type,
                         playerCount + " players",
-                        formattedCreatedAt
+                        createdAt
                 });
             }
 
