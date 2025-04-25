@@ -506,11 +506,11 @@ public class AdminDashboard extends JFrame {
                 // Parse and format the date if it's not null
                 // String formattedDate = "";
                 // if (joinDate != null && !joinDate.isEmpty()) {
-                //     try {
-                //         formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(joinDate));
-                //     } catch (Exception e) {
-                //         formattedDate = joinDate; // Use as-is if parsing fails
-                //     }
+                // try {
+                // formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(joinDate));
+                // } catch (Exception e) {
+                // formattedDate = joinDate; // Use as-is if parsing fails
+                // }
                 // }
 
                 memberTableModel.addRow(new Object[] {
@@ -519,7 +519,7 @@ public class AdminDashboard extends JFrame {
                         lastName,
                         email,
                         phone,
-                     //   formattedDate,
+                        // formattedDate,
                         status
                 });
             }
@@ -614,39 +614,47 @@ public class AdminDashboard extends JFrame {
 
                 // Format the date and times
                 String formattedDate = "";
-                String formattedTimeRange = "";
+                // String formattedTimeRange = "";
                 String formattedCreatedAt = "";
 
+                // Use the TimeParser utility to safely parse and format times
+                String formattedStartTime = TimeParser.parseTimeToDisplay(startTime);
+                String formattedEndTime = TimeParser.parseTimeToDisplay(endTime);
+                String formattedTimeRange = formattedStartTime + " - " + formattedEndTime;
+
                 // try {
-                //     if (reservationDate != null) {
-                //         formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(reservationDate));
-                //     }
+                // if (reservationDate != null) {
+                // formattedDate =
+                // dateFormat.format(DateUtils.parseSQLiteDate(reservationDate));
+                // }
 
-                //     if (startTime != null && endTime != null) {
-                //         Date startTimeDate = DateUtils.parseSQLiteTime(startTime);
-                //         Date endTimeDate = DateUtils.parseSQLiteTime(endTime);
-                //         formattedTimeRange = timeFormat.format(startTimeDate) + " - " + timeFormat.format(endTimeDate);
-                //     }
+                // if (startTime != null && endTime != null) {
+                // Date startTimeDate = DateUtils.parseSQLiteTime(startTime);
+                // Date endTimeDate = DateUtils.parseSQLiteTime(endTime);
+                // formattedTimeRange = timeFormat.format(startTimeDate) + " - " +
+                // timeFormat.format(endTimeDate);
+                // }
 
-                //     if (createdAt != null) {
-                //         formattedCreatedAt = createdFormat.format(DateUtils.parseSQLiteDateTime(createdAt));
-                //     }
+                // if (createdAt != null) {
+                // formattedCreatedAt =
+                // createdFormat.format(DateUtils.parseSQLiteDateTime(createdAt));
+                // }
                 // } catch (Exception e) {
-                //     // Use raw values if parsing fails
-                //     formattedDate = reservationDate;
-                //     formattedTimeRange = startTime + " - " + endTime;
-                //     formattedCreatedAt = createdAt;
+                // // Use raw values if parsing fails
+                // formattedDate = reservationDate;
+                // formattedTimeRange = startTime + " - " + endTime;
+                // formattedCreatedAt = createdAt;
                 // }
 
                 reservationTableModel.addRow(new Object[] {
                         reservationId,
                         "Court " + courtNumber,
                         firstName + " " + lastName,
-                        formattedDate,
+                        reservationDate,
                         formattedTimeRange,
                         type,
                         playerCount + " players",
-                        formattedCreatedAt
+                        createdAt
                 });
             }
 
@@ -1172,12 +1180,19 @@ public class AdminDashboard extends JFrame {
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
+
                 int courtNumber = rs.getInt("court_number");
                 String firstName = rs.getString("first_name");
                 String lastName = rs.getString("last_name");
-                Date reservationDate = rs.getDate("reservation_date");
-                Time startTime = rs.getTime("start_time");
-                Time endTime = rs.getTime("end_time");
+                String reservationDate = rs.getString("reservation_date");
+
+                String startTime = rs.getString("start_time");
+                String endTime = rs.getString("end_time");
+
+                // Use the TimeParser utility to safely parse and format times
+                String formattedStartTime = TimeParser.parseTimeToDisplay(startTime);
+                String formattedEndTime = TimeParser.parseTimeToDisplay(endTime);
+
                 String type = rs.getString("reservation_type");
                 Timestamp createdAt = rs.getTimestamp("created_at");
 
@@ -1204,10 +1219,13 @@ public class AdminDashboard extends JFrame {
                 detailsPanel.add(new JLabel(firstName + " " + lastName));
 
                 detailsPanel.add(new JLabel("Date:"));
-                detailsPanel.add(new JLabel(dateFormat.format(reservationDate)));
+                // detailsPanel.add(new JLabel(dateFormat.format(reservationDate)));
+                detailsPanel.add(new JLabel(reservationDate));
 
                 detailsPanel.add(new JLabel("Time:"));
-                detailsPanel.add(new JLabel(timeFormat.format(startTime) + " - " + timeFormat.format(endTime)));
+                // detailsPanel.add(new JLabel(timeFormat.format(startTime) + " - " +
+                // timeFormat.format(endTime)));
+                detailsPanel.add(new JLabel(formattedStartTime + " - " + formattedEndTime));
 
                 detailsPanel.add(new JLabel("Type:"));
                 detailsPanel.add(new JLabel(type));
@@ -1299,6 +1317,7 @@ public class AdminDashboard extends JFrame {
             conn.setAutoCommit(false);
 
             try {
+
                 // Delete reservation participants first
                 String deleteParticipantsQuery = "DELETE FROM ReservationParticipants WHERE reservation_id = ?";
                 PreparedStatement deleteParticipantsStmt = conn.prepareStatement(deleteParticipantsQuery);
