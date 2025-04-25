@@ -1180,12 +1180,19 @@ public class AdminDashboard extends JFrame {
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
+
                 int courtNumber = rs.getInt("court_number");
                 String firstName = rs.getString("first_name");
                 String lastName = rs.getString("last_name");
-                Date reservationDate = rs.getDate("reservation_date");
-                Time startTime = rs.getTime("start_time");
-                Time endTime = rs.getTime("end_time");
+                String reservationDate = rs.getString("reservation_date");
+
+                String startTime = rs.getString("start_time");
+                String endTime = rs.getString("end_time");
+
+                // Use the TimeParser utility to safely parse and format times
+                String formattedStartTime = TimeParser.parseTimeToDisplay(startTime);
+                String formattedEndTime = TimeParser.parseTimeToDisplay(endTime);
+
                 String type = rs.getString("reservation_type");
                 Timestamp createdAt = rs.getTimestamp("created_at");
 
@@ -1212,10 +1219,13 @@ public class AdminDashboard extends JFrame {
                 detailsPanel.add(new JLabel(firstName + " " + lastName));
 
                 detailsPanel.add(new JLabel("Date:"));
-                detailsPanel.add(new JLabel(dateFormat.format(reservationDate)));
+                // detailsPanel.add(new JLabel(dateFormat.format(reservationDate)));
+                detailsPanel.add(new JLabel(reservationDate));
 
                 detailsPanel.add(new JLabel("Time:"));
-                detailsPanel.add(new JLabel(timeFormat.format(startTime) + " - " + timeFormat.format(endTime)));
+                // detailsPanel.add(new JLabel(timeFormat.format(startTime) + " - " +
+                // timeFormat.format(endTime)));
+                detailsPanel.add(new JLabel(formattedStartTime + " - " + formattedEndTime));
 
                 detailsPanel.add(new JLabel("Type:"));
                 detailsPanel.add(new JLabel(type));
@@ -1307,6 +1317,7 @@ public class AdminDashboard extends JFrame {
             conn.setAutoCommit(false);
 
             try {
+
                 // Delete reservation participants first
                 String deleteParticipantsQuery = "DELETE FROM ReservationParticipants WHERE reservation_id = ?";
                 PreparedStatement deleteParticipantsStmt = conn.prepareStatement(deleteParticipantsQuery);
