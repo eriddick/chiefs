@@ -93,20 +93,25 @@ public class MemberDashboard extends JFrame {
 
         // Set up action buttons in the table
         Action cancelAction = new AbstractAction() {
-            public void actionPerformed(ActionEvent e) {
-                int row = Integer.parseInt(e.getActionCommand());
-                int modelRow = reservationsTable.convertRowIndexToModel(row);
-                String action = (String)reservationsTableModel.getValueAt(modelRow, 5);
-                
-                if (action.contains("Cancel")) {
-                    cancelReservation(row);
-                } else if (action.contains("Edit")) {
-                    editReservation(row);
-                }
-            }
-        };
+          public void actionPerformed(ActionEvent e) {
+              int row = Integer.parseInt(e.getActionCommand());
+              cancelReservation(row);
+          }
+      };
 
-        ButtonColumn buttonColumn = new ButtonColumn(reservationsTable, cancelAction, 5);
+      Action editAction = new AbstractAction() {
+          public void actionPerformed(ActionEvent e) {
+              int row = Integer.parseInt(e.getActionCommand());
+              editReservation(row); // This was incorrectly calling cancelReservation
+          }
+      };
+
+
+        reservationsTable.getColumn("Actions").setCellRenderer(new ActionCellRenderer());
+        reservationsTable.getColumn("Actions").setCellEditor(new ActionCellEditor(reservationsTable, editAction, cancelAction));
+
+
+       // ButtonColumn buttonColumn = new ButtonColumn(reservationsTable, cancelAction, 5);
 
         // Initialize action buttons
         makeReservationButton = new JButton("Make Reservation");
@@ -115,6 +120,69 @@ public class MemberDashboard extends JFrame {
         updateProfileButton = new JButton("Update Profile");
         viewMemberListButton = new JButton("View Member List");
     }
+
+    public class ActionCellRenderer extends JPanel implements TableCellRenderer {
+        private final JButton editButton = new JButton("Edit");
+        private final JButton cancelButton = new JButton("Cancel");
+
+        public ActionCellRenderer() {
+            setLayout(new FlowLayout(FlowLayout.CENTER, 5, 0));
+            add(editButton);
+            add(cancelButton);
+            setOpaque(true);
+
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                                                      boolean isSelected, boolean hasFocus,
+                                                      int row, int column) {
+            if (isSelected) {
+                setBackground(table.getSelectionBackground());
+            } else {
+                setBackground(table.getBackground());
+            }
+            return this;
+        }
+    }
+
+    public class ActionCellEditor extends AbstractCellEditor implements TableCellEditor {
+        private final JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 0));
+        private final JButton editButton = new JButton("Edit");
+        private final JButton cancelButton = new JButton("Cancel");
+
+        public ActionCellEditor(JTable table, Action editAction, Action cancelAction) {
+            editButton.addActionListener(e -> {
+                int row = table.getEditingRow();
+                table.getSelectionModel().setSelectionInterval(row, row); // optional: ensure row stays selected
+                editAction.actionPerformed(new ActionEvent(table, ActionEvent.ACTION_PERFORMED, String.valueOf(row)));
+                fireEditingStopped();
+            });
+
+            cancelButton.addActionListener(e -> {
+                int row = table.getEditingRow();
+                table.getSelectionModel().setSelectionInterval(row, row);
+                cancelAction.actionPerformed(new ActionEvent(table, ActionEvent.ACTION_PERFORMED, String.valueOf(row)));
+                fireEditingStopped();
+            });
+
+            panel.add(editButton);
+            panel.add(cancelButton);
+        }
+
+        @Override
+        public Component getTableCellEditorComponent(JTable table, Object value,
+                                                    boolean isSelected, int row, int column) {
+            panel.setBackground(table.getSelectionBackground());
+            return panel;
+        }
+
+        @Override
+        public Object getCellEditorValue() {
+            return null;
+        }
+    }
+
 
     private void setupLayout() {
         JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
@@ -206,6 +274,8 @@ public class MemberDashboard extends JFrame {
 
         // Set up reservations panel
         JScrollPane scrollPane = new JScrollPane(reservationsTable);
+        TableColumn actionsColumn = reservationsTable.getColumn("Actions");
+        actionsColumn.setPreferredWidth(160);
         upcomingReservationsPanel.add(scrollPane, BorderLayout.CENTER);
 
         mainPanel.add(upcomingReservationsPanel, BorderLayout.CENTER);
@@ -374,7 +444,7 @@ public class MemberDashboard extends JFrame {
                         timeRange,
                         type,
                         participantCount + " players",
-                        "Edit / Cancel" // Changed to include editing option
+                        "Actions" // Changed to include editing option
                 });
             }
 
@@ -483,10 +553,10 @@ public class MemberDashboard extends JFrame {
             // Get the reservation ID and details
             String court = (String) reservationsTableModel.getValueAt(row, 0);
             String dateStr = (String) reservationsTableModel.getValueAt(row, 1);
-            
+
             // Reformat date for SQLite
             String sqlDateStr = dateStr.substring(6) + "-" + dateStr.substring(0, 2) + "-" + dateStr.substring(3, 5);
-            
+
             int courtNumber = Integer.parseInt(court.replace("Court ", ""));
 
             // Get reservation ID
@@ -505,11 +575,11 @@ public class MemberDashboard extends JFrame {
 
             if (findRs.next()) {
                 int reservationId = findRs.getInt("reservation_id");
-                
+
                 // Create and show the reservation edit dialog
                 ReservationEditDialog editDialog = new ReservationEditDialog(reservationId);
                 editDialog.setVisible(true);
-                
+
                 // Reload reservations after dialog is closed
                 loadUpcomingReservations();
             } else {
@@ -572,10 +642,10 @@ class ParticipantEntry {
         JDialog dialog = new JDialog(this, "Member Directory", true);
         dialog.setSize(600, 500);
         dialog.setLocationRelativeTo(this);
-        
+
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
+
         // Create the table with member information
         String[] columns = {"ID", "Name", "Email", "Phone", "Status"};
         DefaultTableModel model = new DefaultTableModel(columns, 0) {
@@ -584,11 +654,11 @@ class ParticipantEntry {
                 return false;
             }
         };
-        
+
         JTable memberTable = new JTable(model);
         memberTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         memberTable.setAutoCreateRowSorter(true);
-        
+
         // Add a search field at the top
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JTextField searchField = new JTextField(20);
@@ -596,97 +666,97 @@ class ParticipantEntry {
         searchPanel.add(new JLabel("Search:"));
         searchPanel.add(searchField);
         searchPanel.add(searchButton);
-        
+
         // Add checkboxes for filtering
         JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         JCheckBox showEmailCheckbox = new JCheckBox("Show only members who share email");
         JCheckBox showPhoneCheckbox = new JCheckBox("Show only members who share phone");
         filterPanel.add(showEmailCheckbox);
         filterPanel.add(showPhoneCheckbox);
-        
+
         // Combine search and filter in a top panel
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.add(searchPanel, BorderLayout.NORTH);
         topPanel.add(filterPanel, BorderLayout.SOUTH);
-        
+
         // Add components to the main panel
         panel.add(topPanel, BorderLayout.NORTH);
         panel.add(new JScrollPane(memberTable), BorderLayout.CENTER);
-        
+
         // Add a close button at the bottom
         JButton closeButton = new JButton("Close");
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         buttonPanel.add(closeButton);
         panel.add(buttonPanel, BorderLayout.SOUTH);
-        
+
         // Load member data (initial load)
         loadMemberDirectoryData(model, "", showEmailCheckbox.isSelected(), showPhoneCheckbox.isSelected());
-        
+
         // Add listeners for search and filter
-        searchButton.addActionListener(e -> 
-            loadMemberDirectoryData(model, searchField.getText(), 
-                                showEmailCheckbox.isSelected(), 
+        searchButton.addActionListener(e ->
+            loadMemberDirectoryData(model, searchField.getText(),
+                                showEmailCheckbox.isSelected(),
                                 showPhoneCheckbox.isSelected()));
-        
-        showEmailCheckbox.addActionListener(e -> 
-            loadMemberDirectoryData(model, searchField.getText(), 
-                                showEmailCheckbox.isSelected(), 
+
+        showEmailCheckbox.addActionListener(e ->
+            loadMemberDirectoryData(model, searchField.getText(),
+                                showEmailCheckbox.isSelected(),
                                 showPhoneCheckbox.isSelected()));
-        
-        showPhoneCheckbox.addActionListener(e -> 
-            loadMemberDirectoryData(model, searchField.getText(), 
-                                showEmailCheckbox.isSelected(), 
+
+        showPhoneCheckbox.addActionListener(e ->
+            loadMemberDirectoryData(model, searchField.getText(),
+                                showEmailCheckbox.isSelected(),
                                 showPhoneCheckbox.isSelected()));
-        
+
         // Add listener for enter key in search field
         searchField.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    loadMemberDirectoryData(model, searchField.getText(), 
-                                        showEmailCheckbox.isSelected(), 
+                    loadMemberDirectoryData(model, searchField.getText(),
+                                        showEmailCheckbox.isSelected(),
                                         showPhoneCheckbox.isSelected());
                 }
             }
         });
-        
+
         // Add listener for close button
         closeButton.addActionListener(e -> dialog.dispose());
-        
+
         dialog.getContentPane().add(panel);
         dialog.setVisible(true);
     }
 
     private void loadMemberDirectoryData(DefaultTableModel model, String searchTerm, boolean showEmailOnly, boolean showPhoneOnly) {
         model.setRowCount(0); // Clear existing data
-        
+
         try {
             Connection conn = dbConnection.getConnection();
-            
+
             StringBuilder queryBuilder = new StringBuilder();
             queryBuilder.append("SELECT m.member_id, m.first_name, m.last_name, m.email, m.phone, m.status, m.show_email, m.show_phone ")
                        .append("FROM Members m ")
                        .append("WHERE m.status != 'INACTIVE' ");
-            
+
             // Add search condition if search term is provided
             if (!searchTerm.isEmpty()) {
                 queryBuilder.append("AND (m.first_name LIKE ? OR m.last_name LIKE ? OR m.email LIKE ?) ");
             }
-            
+
             // Add filters for email and phone visibility
             if (showEmailOnly) {
                 queryBuilder.append("AND m.show_email = 1 ");
             }
-            
+
             if (showPhoneOnly) {
                 queryBuilder.append("AND m.show_phone = 1 ");
             }
-            
+
             // Add ordering
             queryBuilder.append("ORDER BY m.last_name, m.first_name");
-            
+
             PreparedStatement stmt = conn.prepareStatement(queryBuilder.toString());
-            
+
             // Set search parameters if needed
             if (!searchTerm.isEmpty()) {
                 String likePattern = "%" + searchTerm + "%";
@@ -694,9 +764,9 @@ class ParticipantEntry {
                 stmt.setString(2, likePattern);
                 stmt.setString(3, likePattern);
             }
-            
+
             ResultSet rs = stmt.executeQuery();
-            
+
             while (rs.next()) {
                 int memberId = rs.getInt("member_id");
                 String firstName = rs.getString("first_name");
@@ -706,11 +776,11 @@ class ParticipantEntry {
                 String status = rs.getString("status");
                 boolean showEmail = rs.getBoolean("show_email");
                 boolean showPhone = rs.getBoolean("show_phone");
-                
+
                 // Only display email/phone if the member has chosen to share it
                 String displayEmail = showEmail ? email : "Not shared";
                 String displayPhone = showPhone ? phone : "Not shared";
-                
+
                 model.addRow(new Object[]{
                     memberId,
                     firstName + " " + lastName,
@@ -719,11 +789,11 @@ class ParticipantEntry {
                     status
                 });
             }
-            
+
             rs.close();
             stmt.close();
             conn.close();
-            
+
         } catch (SQLException ex) {
             JOptionPane.showMessageDialog(null,
                     "Error loading member directory: " + ex.getMessage(),
@@ -843,22 +913,22 @@ class ParticipantEntry {
         private JButton addParticipantButton;
         private JButton saveButton;
         private JButton cancelButton;
-        
+
         private ArrayList<ParticipantEntry> participants = new ArrayList<>();
-        
+
         public ReservationEditDialog(int reservationId) {
             super((JFrame) null, "Edit Reservation", true);
             this.reservationId = reservationId;
-            
+
             initComponents();
             setupLayout();
             setupListeners();
             loadReservationParticipants();
-            
+
             setSize(600, 400);
             setLocationRelativeTo(null);
         }
-        
+
         private void initComponents() {
             // Participants table
             String[] participantColumns = { "Type", "Name", "Email", "Remove" };
@@ -869,12 +939,12 @@ class ParticipantEntry {
                 }
             };
             participantsTable = new JTable(participantsTableModel);
-            
+
             // Buttons
             addParticipantButton = new JButton("Substitute Member");
             saveButton = new JButton("Save Changes");
             cancelButton = new JButton("Cancel");
-            
+
             // Set up the "Remove" button in the table
             Action removeAction = new AbstractAction() {
                 public void actionPerformed(ActionEvent e) {
@@ -890,91 +960,91 @@ class ParticipantEntry {
                     participantsTableModel.removeRow(modelRow);
                 }
             };
-            
+
             ButtonColumn buttonColumn = new ButtonColumn(participantsTable, removeAction, 3);
         }
-        
+
         private void setupLayout() {
             JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
             mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-            
+
             // Title at the top
             JLabel titleLabel = new JLabel("Edit Reservation Participants", SwingConstants.CENTER);
             titleLabel.setFont(new Font("Arial", Font.BOLD, 16));
             mainPanel.add(titleLabel, BorderLayout.NORTH);
-            
+
             // Participants table in the center
             JScrollPane scrollPane = new JScrollPane(participantsTable);
             mainPanel.add(scrollPane, BorderLayout.CENTER);
-            
+
             // Buttons at the bottom
             JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
             buttonPanel.add(addParticipantButton);
             buttonPanel.add(saveButton);
             buttonPanel.add(cancelButton);
             mainPanel.add(buttonPanel, BorderLayout.SOUTH);
-            
+
             getContentPane().add(mainPanel);
         }
-        
+
         private void setupListeners() {
             addParticipantButton.addActionListener(e -> showAddParticipantDialog());
-            
+
             saveButton.addActionListener(e -> {
                 if (saveReservationChanges()) {
                     dispose();
                 }
             });
-            
+
             cancelButton.addActionListener(e -> dispose());
         }
-        
+
         private void loadReservationParticipants() {
             participantsTableModel.setRowCount(0);
             participants.clear();
-            
+
             try {
                 Connection conn = dbConnection.getConnection();
-                
+
                 // Get reservation type
                 String typeQuery = "SELECT reservation_type FROM Reservations WHERE reservation_id = ?";
                 PreparedStatement typeStmt = conn.prepareStatement(typeQuery);
                 typeStmt.setInt(1, reservationId);
                 ResultSet typeRs = typeStmt.executeQuery();
-                
+
                 String reservationType = "Singles";
                 if (typeRs.next()) {
                     reservationType = typeRs.getString("reservation_type");
                 }
-                
+
                 typeRs.close();
                 typeStmt.close();
-                
+
                 // Get participants - first get members
                 String memberQuery = "SELECT rp.participant_id, m.member_id, m.first_name, m.last_name, m.email " +
                         "FROM ReservationParticipants rp " +
                         "JOIN Members m ON rp.member_id = m.member_id " +
                         "WHERE rp.reservation_id = ? AND rp.member_id IS NOT NULL " +
                         "ORDER BY rp.participant_id";
-                
+
                 PreparedStatement memberStmt = conn.prepareStatement(memberQuery);
                 memberStmt.setInt(1, reservationId);
                 ResultSet memberRs = memberStmt.executeQuery();
-                
+
                 while (memberRs.next()) {
                     int memberId = memberRs.getInt("member_id");
                     String firstName = memberRs.getString("first_name");
                     String lastName = memberRs.getString("last_name");
                     String email = memberRs.getString("email");
                     String fullName = firstName + " " + lastName;
-                    
+
                     ParticipantEntry entry = new ParticipantEntry(
                             "Member",
                             memberId,
                             0, // Guest ID is 0 for members
                             fullName,
                             email);
-                    
+
                     participants.add(entry);
                     participantsTableModel.addRow(new Object[] {
                             "Member",
@@ -983,21 +1053,21 @@ class ParticipantEntry {
                             "Remove"
                     });
                 }
-                
+
                 memberRs.close();
                 memberStmt.close();
-                
+
                 // Then get guests
                 String guestQuery = "SELECT rp.participant_id, g.guest_id, g.first_name, g.last_name, g.email, g.host_member_id " +
                         "FROM ReservationParticipants rp " +
                         "JOIN Guests g ON rp.guest_id = g.guest_id " +
                         "WHERE rp.reservation_id = ? " +
                         "ORDER BY rp.participant_id";
-                
+
                 PreparedStatement guestStmt = conn.prepareStatement(guestQuery);
                 guestStmt.setInt(1, reservationId);
                 ResultSet guestRs = guestStmt.executeQuery();
-                
+
                 while (guestRs.next()) {
                     int guestId = guestRs.getInt("guest_id");
                     int hostMemberId = guestRs.getInt("host_member_id");
@@ -1005,14 +1075,14 @@ class ParticipantEntry {
                     String lastName = guestRs.getString("last_name");
                     String email = guestRs.getString("email");
                     String fullName = firstName + " " + lastName;
-                    
+
                     ParticipantEntry entry = new ParticipantEntry(
                             "Guest",
                             hostMemberId,
                             guestId,
                             fullName,
                             email);
-                    
+
                     participants.add(entry);
                     participantsTableModel.addRow(new Object[] {
                             "Guest",
@@ -1021,12 +1091,12 @@ class ParticipantEntry {
                             "Remove"
                     });
                 }
-                
+
                 guestRs.close();
                 guestStmt.close();
-                
+
                 conn.close();
-                
+
             } catch (SQLException ex) {
                 JOptionPane.showMessageDialog(this,
                         "Error loading reservation participants: " + ex.getMessage(),
@@ -1034,7 +1104,7 @@ class ParticipantEntry {
                         JOptionPane.ERROR_MESSAGE);
             }
         }
-        
+
         private void showAddParticipantDialog() {
             JDialog dialog = new JDialog(this, "Add Member Participant", true);
             dialog.setSize(400, 300);
@@ -1162,29 +1232,29 @@ class ParticipantEntry {
 
             dialog.setVisible(true);
         }
-        
+
         private boolean saveReservationChanges() {
             try {
                 Connection conn = dbConnection.getConnection();
                 conn.setAutoCommit(false);
-                
+
                 try {
                     // Remove all current participants (except primary member)
                     String deleteQuery = "DELETE FROM ReservationParticipants " +
                                        "WHERE reservation_id = ? " +
                                        "AND participant_id NOT IN " +
                                        "(SELECT MIN(participant_id) FROM ReservationParticipants WHERE reservation_id = ?)";
-                    
+
                     PreparedStatement deleteStmt = conn.prepareStatement(deleteQuery);
                     deleteStmt.setInt(1, reservationId);
                     deleteStmt.setInt(2, reservationId);
                     deleteStmt.executeUpdate();
                     deleteStmt.close();
-                    
+
                     // Add all participants except the first one (which is the primary member)
                     for (int i = 1; i < participants.size(); i++) {
                         ParticipantEntry participant = participants.get(i);
-                        
+
                         if ("Member".equals(participant.getType())) {
                             // Add member participant
                             String memberQuery = "INSERT INTO ReservationParticipants " +
@@ -1207,15 +1277,15 @@ class ParticipantEntry {
                             guestStmt.close();
                         }
                     }
-                    
+
                     conn.commit();
                     JOptionPane.showMessageDialog(this,
                             "Reservation updated successfully.",
                             "Success",
                             JOptionPane.INFORMATION_MESSAGE);
-                    
+
                     return true;
-                    
+
                 } catch (SQLException ex) {
                     conn.rollback();
                     JOptionPane.showMessageDialog(this,
@@ -1227,7 +1297,7 @@ class ParticipantEntry {
                     conn.setAutoCommit(true);
                     conn.close();
                 }
-                
+
             } catch (SQLException ex) {
                 JOptionPane.showMessageDialog(this,
                         "Database connection error: " + ex.getMessage(),
@@ -1340,7 +1410,7 @@ class ParticipantEntry {
             });
 
             cancelButton.addActionListener(e -> dispose());
-            
+
             changePasswordButton.addActionListener(e -> showChangePasswordDialog());
         }
 
@@ -1384,7 +1454,7 @@ class ParticipantEntry {
                             JOptionPane.ERROR_MESSAGE);
                     return false;
                 }
-                
+
                 if (!email.matches("^[\\w.-]+@[\\w.-]+\\.[a-zA-Z]{2,}$")) {
                     JOptionPane.showMessageDialog(this,
                             "Please enter a valid email address.",
@@ -1392,7 +1462,7 @@ class ParticipantEntry {
                             JOptionPane.ERROR_MESSAGE);
                     return false;
                 }
-                
+
                 Connection conn = dbConnection.getConnection();
 
                 String query = "UPDATE Members SET email = ?, phone = ?, show_email = ?, show_phone = ? WHERE member_id = ?";
@@ -1436,70 +1506,70 @@ class ParticipantEntry {
                 return false;
             }
         }
-        
+
         private void showChangePasswordDialog() {
             JDialog dialog = new JDialog(this, "Change Password", true);
             dialog.setSize(350, 250);
             dialog.setLocationRelativeTo(this);
-            
+
             JPanel panel = new JPanel(new GridBagLayout());
             panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-            
+
             GridBagConstraints gbc = new GridBagConstraints();
             gbc.fill = GridBagConstraints.HORIZONTAL;
             gbc.insets = new Insets(5, 5, 5, 5);
-            
+
             // Current password field
             gbc.gridx = 0;
             gbc.gridy = 0;
             panel.add(new JLabel("Current Password:"), gbc);
-            
+
             gbc.gridx = 1;
             gbc.gridy = 0;
             JPasswordField currentPasswordField = new JPasswordField(15);
             panel.add(currentPasswordField, gbc);
-            
+
             // New password field
             gbc.gridx = 0;
             gbc.gridy = 1;
             panel.add(new JLabel("New Password:"), gbc);
-            
+
             gbc.gridx = 1;
             gbc.gridy = 1;
             JPasswordField newPasswordField = new JPasswordField(15);
             panel.add(newPasswordField, gbc);
-            
+
             // Confirm password field
             gbc.gridx = 0;
             gbc.gridy = 2;
             panel.add(new JLabel("Confirm Password:"), gbc);
-            
+
             gbc.gridx = 1;
             gbc.gridy = 2;
             JPasswordField confirmPasswordField = new JPasswordField(15);
             panel.add(confirmPasswordField, gbc);
-            
+
             // Buttons
             JButton saveButton = new JButton("Save");
             JButton cancelButton = new JButton("Cancel");
-            
+
             JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
             buttonPanel.add(saveButton);
             buttonPanel.add(cancelButton);
-            
+
             gbc.gridx = 0;
             gbc.gridy = 3;
             gbc.gridwidth = 2;
             panel.add(buttonPanel, gbc);
-            
+
             dialog.getContentPane().add(panel);
-            
+
             // Save button action
             saveButton.addActionListener(e -> {
                 String currentPassword = new String(currentPasswordField.getPassword());
                 String newPassword = new String(newPasswordField.getPassword());
                 String confirmPassword = new String(confirmPasswordField.getPassword());
-                
+
                 if (currentPassword.isEmpty() || newPassword.isEmpty() || confirmPassword.isEmpty()) {
                     JOptionPane.showMessageDialog(dialog,
                             "All fields are required.",
@@ -1507,7 +1577,7 @@ class ParticipantEntry {
                             JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-                
+
                 if (!newPassword.equals(confirmPassword)) {
                     JOptionPane.showMessageDialog(dialog,
                             "New password and confirm password do not match.",
@@ -1515,35 +1585,35 @@ class ParticipantEntry {
                             JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-                
+
                 if (changePassword(currentPassword, newPassword)) {
                     dialog.dispose();
                 }
             });
-            
+
             // Cancel button action
             cancelButton.addActionListener(e -> dialog.dispose());
-            
+
             dialog.setVisible(true);
         }
-        
+
         private boolean changePassword(String currentPassword, String newPassword) {
             try {
                 Connection conn = dbConnection.getConnection();
-                
+
                 // First verify the current password
                 String verifyQuery = "SELECT COUNT(*) FROM Users WHERE member_id = ? AND password = ?";
                 PreparedStatement verifyStmt = conn.prepareStatement(verifyQuery);
                 verifyStmt.setInt(1, user.getMemberId());
                 verifyStmt.setString(2, currentPassword);
-                
+
                 ResultSet verifyRs = verifyStmt.executeQuery();
                 verifyRs.next();
                 int count = verifyRs.getInt(1);
-                
+
                 verifyRs.close();
                 verifyStmt.close();
-                
+
                 if (count == 0) {
                     JOptionPane.showMessageDialog(this,
                             "Current password is incorrect.",
@@ -1551,18 +1621,18 @@ class ParticipantEntry {
                             JOptionPane.ERROR_MESSAGE);
                     return false;
                 }
-                
+
                 // Update the password
                 String updateQuery = "UPDATE Users SET password = ? WHERE member_id = ?";
                 PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
                 updateStmt.setString(1, newPassword);
                 updateStmt.setInt(2, user.getMemberId());
-                
+
                 int rowsUpdated = updateStmt.executeUpdate();
-                
+
                 updateStmt.close();
                 conn.close();
-                
+
                 if (rowsUpdated > 0) {
                     JOptionPane.showMessageDialog(this,
                             "Password changed successfully.",
@@ -1576,7 +1646,7 @@ class ParticipantEntry {
                             JOptionPane.ERROR_MESSAGE);
                     return false;
                 }
-                
+
             } catch (SQLException ex) {
                 JOptionPane.showMessageDialog(this,
                         "Error changing password: " + ex.getMessage(),
