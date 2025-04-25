@@ -1,14 +1,14 @@
 package Main;
 
-import javax.swing.*;
-import javax.swing.table.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.math.BigDecimal;
 import java.sql.*;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Date;
-import java.text.SimpleDateFormat;
-import java.math.BigDecimal;
+import javax.swing.*;
+import javax.swing.table.*;
 
 public class BillingSystem extends JFrame {
     private User currentUser;
@@ -367,7 +367,7 @@ public class BillingSystem extends JFrame {
                         
                         // Create bill
                         String billQuery = "INSERT INTO Bills (member_id, bill_date, total_amount, due_date, is_paid, sent_email) " +
-                                         "VALUES (?, CURDATE(), 400.00, ?, FALSE, FALSE)";
+                                         "VALUES (?, date('now'), 400.00, ?, FALSE, FALSE)";
                         
                         PreparedStatement billStmt = conn.prepareStatement(billQuery, Statement.RETURN_GENERATED_KEYS);
                         billStmt.setInt(1, memberId);
@@ -682,7 +682,7 @@ public class BillingSystem extends JFrame {
                     
                     switch (itemType) {
                         case "MEMBERSHIP_FEE":
-                            updateQuery = "UPDATE MembershipFees SET is_paid = TRUE, paid_date = CURDATE() WHERE fee_id = ?";
+                            updateQuery = "UPDATE MembershipFees SET is_paid = TRUE, paid_date = date('now') WHERE fee_id = ?";
                             break;
                         case "LATE_FEE":
                             updateQuery = "UPDATE LateFees SET is_paid = TRUE WHERE late_fee_id = ?";

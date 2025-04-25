@@ -1,13 +1,13 @@
 package Main;
 
-import javax.swing.*;
-import javax.swing.table.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.Date;
-import java.text.SimpleDateFormat;
+import javax.swing.*;
+import javax.swing.table.*;
 
 public class AdminDashboard extends JFrame {
     private User currentUser;
@@ -504,14 +504,14 @@ public class AdminDashboard extends JFrame {
                 String status = rs.getString("status");
 
                 // Parse and format the date if it's not null
-                String formattedDate = "";
-                if (joinDate != null && !joinDate.isEmpty()) {
-                    try {
-                        formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(joinDate));
-                    } catch (Exception e) {
-                        formattedDate = joinDate; // Use as-is if parsing fails
-                    }
-                }
+                // String formattedDate = "";
+                // if (joinDate != null && !joinDate.isEmpty()) {
+                //     try {
+                //         formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(joinDate));
+                //     } catch (Exception e) {
+                //         formattedDate = joinDate; // Use as-is if parsing fails
+                //     }
+                // }
 
                 memberTableModel.addRow(new Object[] {
                         memberId,
@@ -519,7 +519,7 @@ public class AdminDashboard extends JFrame {
                         lastName,
                         email,
                         phone,
-                        formattedDate,
+                     //   formattedDate,
                         status
                 });
             }
@@ -617,26 +617,26 @@ public class AdminDashboard extends JFrame {
                 String formattedTimeRange = "";
                 String formattedCreatedAt = "";
 
-                try {
-                    if (reservationDate != null) {
-                        formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(reservationDate));
-                    }
+                // try {
+                //     if (reservationDate != null) {
+                //         formattedDate = dateFormat.format(DateUtils.parseSQLiteDate(reservationDate));
+                //     }
 
-                    if (startTime != null && endTime != null) {
-                        Date startTimeDate = DateUtils.parseSQLiteTime(startTime);
-                        Date endTimeDate = DateUtils.parseSQLiteTime(endTime);
-                        formattedTimeRange = timeFormat.format(startTimeDate) + " - " + timeFormat.format(endTimeDate);
-                    }
+                //     if (startTime != null && endTime != null) {
+                //         Date startTimeDate = DateUtils.parseSQLiteTime(startTime);
+                //         Date endTimeDate = DateUtils.parseSQLiteTime(endTime);
+                //         formattedTimeRange = timeFormat.format(startTimeDate) + " - " + timeFormat.format(endTimeDate);
+                //     }
 
-                    if (createdAt != null) {
-                        formattedCreatedAt = createdFormat.format(DateUtils.parseSQLiteDateTime(createdAt));
-                    }
-                } catch (Exception e) {
-                    // Use raw values if parsing fails
-                    formattedDate = reservationDate;
-                    formattedTimeRange = startTime + " - " + endTime;
-                    formattedCreatedAt = createdAt;
-                }
+                //     if (createdAt != null) {
+                //         formattedCreatedAt = createdFormat.format(DateUtils.parseSQLiteDateTime(createdAt));
+                //     }
+                // } catch (Exception e) {
+                //     // Use raw values if parsing fails
+                //     formattedDate = reservationDate;
+                //     formattedTimeRange = startTime + " - " + endTime;
+                //     formattedCreatedAt = createdAt;
+                // }
 
                 reservationTableModel.addRow(new Object[] {
                         reservationId,
