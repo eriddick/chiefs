@@ -612,7 +612,7 @@ public class TreasurerDashboard extends JFrame {
                 int memberId = rs.getInt("member_id");
                 String firstName = rs.getString("first_name");
                 String lastName = rs.getString("last_name");
-                Date dueDate = rs.getDate("due_date");
+                String dueDate = rs.getString("due_date");
                 BigDecimal amount = rs.getBigDecimal("amount");
                 int monthsLate = rs.getInt("months_late");
                 BigDecimal lateFees = rs.getBigDecimal("late_fees");
@@ -621,7 +621,8 @@ public class TreasurerDashboard extends JFrame {
                 lateFeesTableModel.addRow(new Object[] {
                         String.valueOf(memberId),
                         firstName + " " + lastName,
-                        dueDate != null ? dateFormat.format(dueDate) : "",
+                        // dueDate != null ? dateFormat.format(dueDate) : "",
+                        dueDate,
                         String.format("$%.2f", amount),
                         String.valueOf(monthsLate),
                         String.format("$%.2f", lateFees),
@@ -1047,7 +1048,7 @@ public class TreasurerDashboard extends JFrame {
                 String lastName = billRs.getString("last_name");
                 String email = billRs.getString("email");
                 BigDecimal amount = billRs.getBigDecimal("total_amount");
-                Date dueDate = billRs.getDate("due_date");
+                String dueDate = billRs.getString("due_date");
 
                 SimpleDateFormat dateFormat = new SimpleDateFormat("MMMM dd, yyyy");
 
@@ -1057,7 +1058,8 @@ public class TreasurerDashboard extends JFrame {
                 StringBuilder emailContent = new StringBuilder();
                 emailContent.append("Dear ").append(firstName).append(" ").append(lastName).append(",\n\n");
                 emailContent.append("This is a reminder that your payment of $").append(amount).append(" is due on ");
-                emailContent.append(dateFormat.format(dueDate)).append(".\n\n");
+                // emailContent.append(dateFormat.format(dueDate)).append(".\n\n");
+                emailContent.append(dateFormat).append(".\n\n");
                 emailContent.append("Please log in to your account to make a payment.\n\n");
                 emailContent.append("Thank you,\nTennis Club Billing Department");
 

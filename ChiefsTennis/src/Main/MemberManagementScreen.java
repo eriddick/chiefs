@@ -397,13 +397,15 @@ public class MemberManagementScreen extends JFrame {
             SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy");
 
             while (rs.next()) {
-                Date startDate = rs.getDate("start_date");
-                Date endDate = rs.getDate("end_date");
+                String startDate = rs.getString("start_date");
+                String endDate = rs.getString("end_date");
                 String reason = rs.getString("reason");
 
                 historyModel.addRow(new Object[] {
-                        startDate != null ? dateFormat.format(startDate) : "",
-                        endDate != null ? dateFormat.format(endDate) : "Current",
+                        // startDate != null ? dateFormat.format(startDate) : "",
+                        // endDate != null ? dateFormat.format(endDate) : "Current",
+                        startDate,
+                        endDate,
                         reason != null ? reason : ""
                 });
             }
@@ -670,128 +672,131 @@ public class MemberManagementScreen extends JFrame {
             }
         }
 
-       // Find the saveMember() method in MemberManagementScreen$MemberDialog class
-// and replace the relevant part with this SQLite-compatible version
+        // Find the saveMember() method in MemberManagementScreen$MemberDialog class
+        // and replace the relevant part with this SQLite-compatible version
 
-private boolean saveMember() {
-    try {
-        Connection conn = dbConnection.getConnection();
-        conn.setAutoCommit(false);
+        private boolean saveMember() {
+            try {
+                Connection conn = dbConnection.getConnection();
+                conn.setAutoCommit(false);
 
-        try {
-            if (memberId > 0) {
-                // Update existing member
-                String updateQuery = "UPDATE Members SET first_name = ?, last_name = ?, " +
-                        "email = ?, phone = ?, status = ?, show_email = ?, show_phone = ? " +
-                        "WHERE member_id = ?";
+                try {
+                    if (memberId > 0) {
+                        // Update existing member
+                        String updateQuery = "UPDATE Members SET first_name = ?, last_name = ?, " +
+                                "email = ?, phone = ?, status = ?, show_email = ?, show_phone = ? " +
+                                "WHERE member_id = ?";
 
-                PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
-                updateStmt.setString(1, firstNameField.getText().trim());
-                updateStmt.setString(2, lastNameField.getText().trim());
-                updateStmt.setString(3, emailField.getText().trim());
-                updateStmt.setString(4, phoneField.getText().trim());
-                updateStmt.setString(5, (String) statusComboBox.getSelectedItem());
-                updateStmt.setBoolean(6, showEmailCheckbox.isSelected());
-                updateStmt.setBoolean(7, showPhoneCheckbox.isSelected());
-                updateStmt.setInt(8, memberId);
+                        PreparedStatement updateStmt = conn.prepareStatement(updateQuery);
+                        updateStmt.setString(1, firstNameField.getText().trim());
+                        updateStmt.setString(2, lastNameField.getText().trim());
+                        updateStmt.setString(3, emailField.getText().trim());
+                        updateStmt.setString(4, phoneField.getText().trim());
+                        updateStmt.setString(5, (String) statusComboBox.getSelectedItem());
+                        updateStmt.setBoolean(6, showEmailCheckbox.isSelected());
+                        updateStmt.setBoolean(7, showPhoneCheckbox.isSelected());
+                        updateStmt.setInt(8, memberId);
 
-                updateStmt.executeUpdate();
-                updateStmt.close();
-            } else {
-                // Insert new member
-                // Use SQLite date function instead of CURDATE()
-                String insertQuery = "INSERT INTO Members (first_name, last_name, email, phone, " +
-                        "join_date, status, show_email, show_phone) " +
-                        "VALUES (?, ?, ?, ?, date('now'), ?, ?, ?)";
+                        updateStmt.executeUpdate();
+                        updateStmt.close();
+                    } else {
+                        // Insert new member
+                        // Use SQLite date function instead of CURDATE()
+                        String insertQuery = "INSERT INTO Members (first_name, last_name, email, phone, " +
+                                "join_date, status, show_email, show_phone) " +
+                                "VALUES (?, ?, ?, ?, date('now'), ?, ?, ?)";
 
-                PreparedStatement insertStmt = conn.prepareStatement(insertQuery,
-                        Statement.RETURN_GENERATED_KEYS);
-                insertStmt.setString(1, firstNameField.getText().trim());
-                insertStmt.setString(2, lastNameField.getText().trim());
-                insertStmt.setString(3, emailField.getText().trim());
-                insertStmt.setString(4, phoneField.getText().trim());
-                insertStmt.setString(5, "ACTIVE"); // Default status for new members
-                insertStmt.setBoolean(6, showEmailCheckbox.isSelected());
-                insertStmt.setBoolean(7, showPhoneCheckbox.isSelected());
+                        PreparedStatement insertStmt = conn.prepareStatement(insertQuery,
+                                Statement.RETURN_GENERATED_KEYS);
+                        insertStmt.setString(1, firstNameField.getText().trim());
+                        insertStmt.setString(2, lastNameField.getText().trim());
+                        insertStmt.setString(3, emailField.getText().trim());
+                        insertStmt.setString(4, phoneField.getText().trim());
+                        insertStmt.setString(5, "ACTIVE"); // Default status for new members
+                        insertStmt.setBoolean(6, showEmailCheckbox.isSelected());
+                        insertStmt.setBoolean(7, showPhoneCheckbox.isSelected());
 
-                insertStmt.executeUpdate();
+                        insertStmt.executeUpdate();
 
-                ResultSet generatedKeys = insertStmt.getGeneratedKeys();
-                if (generatedKeys.next()) {
-                    int newMemberId = generatedKeys.getInt(1);
+                        ResultSet generatedKeys = insertStmt.getGeneratedKeys();
+                        if (generatedKeys.next()) {
+                            int newMemberId = generatedKeys.getInt(1);
 
-                    // Create membership fee record
-                    // Use SQLite date function instead of DATE_ADD
-                    String feeQuery = "INSERT INTO MembershipFees (member_id, fee_year, amount, due_date, is_paid) " +
-                            "VALUES (?, strftime('%Y', 'now'), 400.00, date('now', '+30 days'), 0)";
+                            // Create membership fee record
+                            // Use SQLite date function instead of DATE_ADD
+                            String feeQuery = "INSERT INTO MembershipFees (member_id, fee_year, amount, due_date, is_paid) "
+                                    +
+                                    "VALUES (?, strftime('%Y', 'now'), 400.00, date('now', '+30 days'), 0)";
 
-                    PreparedStatement feeStmt = conn.prepareStatement(feeQuery);
-                    feeStmt.setInt(1, newMemberId);
-                    feeStmt.executeUpdate();
-                    feeStmt.close();
+                            PreparedStatement feeStmt = conn.prepareStatement(feeQuery);
+                            feeStmt.setInt(1, newMemberId);
+                            feeStmt.executeUpdate();
+                            feeStmt.close();
 
-                    // Create member history record
-                    // Use SQLite date function instead of CURDATE()
-                    String historyQuery = "INSERT INTO MemberHistory (member_id, start_date, end_date, reason) " +
-                            "VALUES (?, date('now'), NULL, 'Initial membership')";
+                            // Create member history record
+                            // Use SQLite date function instead of CURDATE()
+                            String historyQuery = "INSERT INTO MemberHistory (member_id, start_date, end_date, reason) "
+                                    +
+                                    "VALUES (?, date('now'), NULL, 'Initial membership')";
 
-                    PreparedStatement historyStmt = conn.prepareStatement(historyQuery);
-                    historyStmt.setInt(1, newMemberId);
-                    historyStmt.executeUpdate();
-                    historyStmt.close();
+                            PreparedStatement historyStmt = conn.prepareStatement(historyQuery);
+                            historyStmt.setInt(1, newMemberId);
+                            historyStmt.executeUpdate();
+                            historyStmt.close();
 
-                    // Create user account
-                    String username = (firstNameField.getText().trim().charAt(0) +
-                            lastNameField.getText().trim()).toLowerCase();
-                    String defaultPassword = "tennis" + newMemberId; // In a real app, use a secure random password
+                            // Create user account
+                            String username = (firstNameField.getText().trim().charAt(0) +
+                                    lastNameField.getText().trim()).toLowerCase();
+                            String defaultPassword = "tennis" + newMemberId; // In a real app, use a secure random
+                                                                             // password
 
-                    String userQuery = "INSERT INTO Users (username, password, role, member_id) " +
-                            "VALUES (?, ?, 'MEMBER', ?)";
+                            String userQuery = "INSERT INTO Users (username, password, role, member_id) " +
+                                    "VALUES (?, ?, 'MEMBER', ?)";
 
-                    PreparedStatement userStmt = conn.prepareStatement(userQuery);
-                    userStmt.setString(1, username);
-                    userStmt.setString(2, defaultPassword); // In a real app, hash this password
-                    userStmt.setInt(3, newMemberId);
-                    userStmt.executeUpdate();
-                    userStmt.close();
+                            PreparedStatement userStmt = conn.prepareStatement(userQuery);
+                            userStmt.setString(1, username);
+                            userStmt.setString(2, defaultPassword); // In a real app, hash this password
+                            userStmt.setInt(3, newMemberId);
+                            userStmt.executeUpdate();
+                            userStmt.close();
 
+                            JOptionPane.showMessageDialog(this,
+                                    "New member added successfully.\n\n" +
+                                            "Username: " + username + "\n" +
+                                            "Password: " + defaultPassword + "\n\n" +
+                                            "Please inform the member to change their password after first login.",
+                                    "Member Added",
+                                    JOptionPane.INFORMATION_MESSAGE);
+                        }
+
+                        generatedKeys.close();
+                        insertStmt.close();
+                    }
+
+                    conn.commit();
+                    return true;
+
+                } catch (SQLException ex) {
+                    conn.rollback();
                     JOptionPane.showMessageDialog(this,
-                            "New member added successfully.\n\n" +
-                                    "Username: " + username + "\n" +
-                                    "Password: " + defaultPassword + "\n\n" +
-                                    "Please inform the member to change their password after first login.",
-                            "Member Added",
-                            JOptionPane.INFORMATION_MESSAGE);
+                            "Error saving member: " + ex.getMessage(),
+                            "Database Error",
+                            JOptionPane.ERROR_MESSAGE);
+                    ex.printStackTrace();
+                    return false;
+                } finally {
+                    conn.setAutoCommit(true);
+                    conn.close();
                 }
 
-                generatedKeys.close();
-                insertStmt.close();
+            } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Error connecting to database: " + ex.getMessage(),
+                        "Database Error",
+                        JOptionPane.ERROR_MESSAGE);
+                return false;
             }
-
-            conn.commit();
-            return true;
-
-        } catch (SQLException ex) {
-            conn.rollback();
-            JOptionPane.showMessageDialog(this,
-                    "Error saving member: " + ex.getMessage(),
-                    "Database Error",
-                    JOptionPane.ERROR_MESSAGE);
-            ex.printStackTrace();
-            return false;
-        } finally {
-            conn.setAutoCommit(true);
-            conn.close();
         }
-
-    } catch (SQLException ex) {
-        JOptionPane.showMessageDialog(this,
-                "Error connecting to database: " + ex.getMessage(),
-                "Database Error",
-                JOptionPane.ERROR_MESSAGE);
-        return false;
-    }
-}
 
         public boolean isConfirmed() {
             return confirmed;

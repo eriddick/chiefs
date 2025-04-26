@@ -1059,14 +1059,16 @@ public class AdminDashboard extends JFrame {
             SimpleDateFormat dateFormat = new SimpleDateFormat("MM/dd/yyyy");
 
             while (historyRs.next()) {
-                Date startDate = historyRs.getDate("start_date");
-                Date endDate = historyRs.getDate("end_date");
+                String startDate = historyRs.getString("start_date");
+                String endDate = historyRs.getString("end_date");
                 String status = historyRs.getString("status");
                 String reason = historyRs.getString("reason");
 
                 model.addRow(new Object[] {
-                        startDate != null ? dateFormat.format(startDate) : "",
-                        endDate != null ? dateFormat.format(endDate) : "Current",
+                        // startDate != null ? dateFormat.format(startDate) : "",
+                        // endDate != null ? dateFormat.format(endDate) : "Current",
+                        startDate,
+                        endDate,
                         status,
                         reason
                 });
