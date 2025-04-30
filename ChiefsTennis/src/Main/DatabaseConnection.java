@@ -1,12 +1,13 @@
 package Main;
 
-import java.sql.*;
 import java.io.File;
+import java.sql.*;
 
 // Database connection class for SQLite
  
 public class DatabaseConnection {
     private String dbPath;
+    public static final Object DB_LOCK = new Object();
     
     // Default constructor using default database path
     
@@ -24,6 +25,69 @@ public class DatabaseConnection {
         }
     }
     
+    public boolean executeExclusiveOperation(ExclusiveDatabaseOperation operation) {
+        // Force garbage collection to release any lingering connections
+        System.gc();
+        
+        // Sleep to allow GC to complete and connections to close
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        Connection conn = null;
+        try {
+            conn = getConnection();
+            
+            // Use a very long timeout for exclusive operations
+            try (Statement pragmaStmt = conn.createStatement()) {
+                pragmaStmt.execute("PRAGMA busy_timeout = 30000;"); // 30 seconds
+            }
+            
+            // Start transaction
+            conn.setAutoCommit(false);
+            
+            // Execute the operation
+            boolean result = operation.execute(conn);
+            
+            // Commit if successful
+            if (result) {
+                conn.commit();
+            } else {
+                conn.rollback();
+            }
+            
+            return result;
+        } catch (SQLException e) {
+            // Roll back on error
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ex) {
+                    System.err.println("Error rolling back transaction: " + ex.getMessage());
+                }
+            }
+            System.err.println("SQL Error in exclusive operation: " + e.getMessage());
+            return false;
+        } finally {
+            // Clean up
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                } catch (SQLException e) {
+                    System.err.println("Error closing connection: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    public interface ExclusiveDatabaseOperation {
+        boolean execute(Connection conn) throws SQLException;
+    }
+
+  
     // Get a database connection
     
     public Connection getConnection() throws SQLException {
@@ -399,13 +463,27 @@ public class DatabaseConnection {
             "    FOREIGN KEY (member_id) REFERENCES Members(member_id)" +
             ");",
             
+            //
+            "CREATE TABLE IF NOT EXISTS Payments (\r\n" + //
+            "    payment_id INTEGER PRIMARY KEY AUTOINCREMENT,\r\n" + //
+            "    bill_id INTEGER NOT NULL,\r\n" + //
+            "    member_id INTEGER NOT NULL,\r\n" + //
+            "    payment_date TEXT NOT NULL,\r\n" + //
+            "    amount REAL NOT NULL,\r\n" + //
+            "    payment_method TEXT NOT NULL,\r\n" + //
+            "    FOREIGN KEY (bill_id) REFERENCES Bills(bill_id),\r\n" + //
+            "    FOREIGN KEY (member_id) REFERENCES Members(member_id)\r\n" + //
+            ");",
+            
             // Create indexes
             "CREATE INDEX IF NOT EXISTS idx_member_status ON Members(status);",
             "CREATE INDEX IF NOT EXISTS idx_reservation_date ON Reservations(reservation_date);",
             "CREATE INDEX IF NOT EXISTS idx_bill_due_date ON Bills(due_date);",
             "CREATE INDEX IF NOT EXISTS idx_bill_paid ON Bills(is_paid);",
             "CREATE INDEX IF NOT EXISTS idx_membership_fee_paid ON MembershipFees(is_paid);",
-            
+            "CREATE INDEX IF NOT EXISTS idx_payment_bill_id ON Payments(bill_id);",
+            "CREATE INDEX IF NOT EXISTS idx_payment_member_id ON Payments(member_id);",
+
             // Insert initial sample data - Courts
             "INSERT INTO Courts (court_number, court_type) VALUES (1, 'Clay');",
             "INSERT INTO Courts (court_number, court_type) VALUES (2, 'Clay');",

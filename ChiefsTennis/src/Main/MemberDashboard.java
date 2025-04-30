@@ -1,5 +1,6 @@
 package Main;
 
+import Main.MemberDashboard.ReservationEditDialog;
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
@@ -35,6 +36,7 @@ public class MemberDashboard extends JFrame {
     private JButton viewBillsButton;
     private JButton updateProfileButton;
     private JButton viewMemberListButton;
+    
 
     public MemberDashboard(User user, DatabaseConnection dbConnection) {
         this.currentUser = user;
@@ -305,8 +307,16 @@ public class MemberDashboard extends JFrame {
         });
 
         viewBillsButton.addActionListener(e -> {
-            BillingSystem billingScreen = new BillingSystem(currentUser);
-            billingScreen.setVisible(true);
+            syncBalanceWithBills();
+            UserBillsDisplay billsDisplay = new UserBillsDisplay(this, currentUser);
+            billsDisplay.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosed(WindowEvent e) {
+                    // Refresh member info to update balance
+                    loadMemberInfo();
+                }
+            });
+            billsDisplay.setVisible(true);
         });
 
         updateProfileButton.addActionListener(e -> {
@@ -374,7 +384,10 @@ public class MemberDashboard extends JFrame {
                 } else {
                     balanceLabel.setForeground(new Color(0, 128, 0)); // Green
                 }
+                syncBalanceWithBills();
             }
+
+            
 
             rs.close();
             stmt.close();
@@ -387,7 +400,145 @@ public class MemberDashboard extends JFrame {
                     JOptionPane.ERROR_MESSAGE);
         }
     }
-
+    private void syncBalanceWithBills() {
+        try {
+            Connection conn = dbConnection.getConnection();
+            conn.setAutoCommit(false);
+            
+            try {
+                // First, get the current outstanding balance
+                String balanceQuery = "SELECT " +
+                    "COALESCE(SUM(CASE WHEN mf.is_paid = 0 THEN mf.amount ELSE 0 END), 0) + " +
+                    "COALESCE(SUM(CASE WHEN lf.is_paid = 0 THEN lf.amount ELSE 0 END), 0) + " +
+                    "COALESCE(SUM(CASE WHEN gf.is_paid = 0 THEN gf.amount ELSE 0 END), 0) AS total_balance " +
+                    "FROM Members m " +
+                    "LEFT JOIN MembershipFees mf ON m.member_id = mf.member_id " +
+                    "LEFT JOIN LateFees lf ON m.member_id = lf.member_id " +
+                    "LEFT JOIN GuestFees gf ON m.member_id = gf.member_id " +
+                    "WHERE m.member_id = ?";
+                    
+                PreparedStatement balanceStmt = conn.prepareStatement(balanceQuery);
+                balanceStmt.setInt(1, currentUser.getMemberId());
+                ResultSet balanceRs = balanceStmt.executeQuery();
+                
+                double totalBalance = 0;
+                if (balanceRs.next()) {
+                    totalBalance = balanceRs.getDouble("total_balance");
+                }
+                
+                balanceRs.close();
+                balanceStmt.close();
+                
+                // Now check if there's an unpaid bill matching this amount
+                String billQuery = "SELECT COUNT(*) AS bill_count FROM Bills " +
+                                  "WHERE member_id = ? AND is_paid = 0 AND total_amount = ?";
+                PreparedStatement billStmt = conn.prepareStatement(billQuery);
+                billStmt.setInt(1, currentUser.getMemberId());
+                billStmt.setDouble(2, totalBalance);
+                
+                ResultSet billRs = billStmt.executeQuery();
+                int billCount = 0;
+                if (billRs.next()) {
+                    billCount = billRs.getInt("bill_count");
+                }
+                
+                billRs.close();
+                billStmt.close();
+                
+                // If we have a balance but no bill, create one
+                if (totalBalance > 0 && billCount == 0) {
+                    // Get any unbilled fees
+                    String unbilledQuery = "SELECT " +
+                        "mf.fee_id AS membership_fee_id, mf.amount AS membership_amount, " +
+                        "lf.late_fee_id AS late_fee_id, lf.amount AS late_amount, " +
+                        "gf.guest_fee_id AS guest_fee_id, gf.amount AS guest_amount " +
+                        "FROM Members m " +
+                        "LEFT JOIN MembershipFees mf ON m.member_id = mf.member_id AND mf.is_paid = 0 " +
+                        "LEFT JOIN LateFees lf ON m.member_id = lf.member_id AND lf.is_paid = 0 " +
+                        "LEFT JOIN GuestFees gf ON m.member_id = gf.member_id AND gf.is_paid = 0 " +
+                        "WHERE m.member_id = ?";
+                    
+                    PreparedStatement unbilledStmt = conn.prepareStatement(unbilledQuery);
+                    unbilledStmt.setInt(1, currentUser.getMemberId());
+                    ResultSet unbilledRs = unbilledStmt.executeQuery();
+                    
+                    // Create a new bill
+                    String createBillQuery = "INSERT INTO Bills (member_id, bill_date, total_amount, due_date, is_paid, sent_email) " +
+                                           "VALUES (?, date('now'), ?, date('now', '+30 days'), 0, 0)";
+                    
+                    PreparedStatement createBillStmt = conn.prepareStatement(createBillQuery, Statement.RETURN_GENERATED_KEYS);
+                    createBillStmt.setInt(1, currentUser.getMemberId());
+                    createBillStmt.setDouble(2, totalBalance);
+                    createBillStmt.executeUpdate();
+                    
+                    ResultSet generatedKeys = createBillStmt.getGeneratedKeys();
+                    int billId = -1;
+                    if (generatedKeys.next()) {
+                        billId = generatedKeys.getInt(1);
+                    }
+                    generatedKeys.close();
+                    createBillStmt.close();
+                    
+                    // Add bill items for each unbilled fee
+                    while (unbilledRs.next() && billId != -1) {
+                        // Check membership fee
+                        int membershipFeeId = unbilledRs.getInt("membership_fee_id");
+                        if (!unbilledRs.wasNull() && membershipFeeId > 0) {
+                            double amount = unbilledRs.getDouble("membership_amount");
+                            addBillItem(conn, billId, "Membership Fee", amount, "MEMBERSHIP_FEE", membershipFeeId);
+                        }
+                        
+                        // Check late fee
+                        int lateFeeId = unbilledRs.getInt("late_fee_id");
+                        if (!unbilledRs.wasNull() && lateFeeId > 0) {
+                            double amount = unbilledRs.getDouble("late_amount");
+                            addBillItem(conn, billId, "Late Fee", amount, "LATE_FEE", lateFeeId);
+                        }
+                        
+                        // Check guest fee
+                        int guestFeeId = unbilledRs.getInt("guest_fee_id");
+                        if (!unbilledRs.wasNull() && guestFeeId > 0) {
+                            double amount = unbilledRs.getDouble("guest_amount");
+                            addBillItem(conn, billId, "Guest Fee", amount, "GUEST_FEE", guestFeeId);
+                        }
+                    }
+                    
+                    unbilledRs.close();
+                    unbilledStmt.close();
+                }
+                
+                conn.commit();
+            } catch (SQLException ex) {
+                conn.rollback();
+                throw ex;
+            } finally {
+                conn.setAutoCommit(true);
+                conn.close();
+            }
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this,
+                "Error synchronizing balance with bills: " + ex.getMessage(),
+                "Database Error",
+                JOptionPane.ERROR_MESSAGE);
+        }
+    }
+    
+    // 2. Helper method to add bill items
+    private void addBillItem(Connection conn, int billId, String description, double amount, 
+                             String itemType, int referenceId) throws SQLException {
+        String query = "INSERT INTO BillItems (bill_id, description, amount, item_type, reference_id) " +
+                      "VALUES (?, ?, ?, ?, ?)";
+        
+        PreparedStatement stmt = conn.prepareStatement(query);
+        stmt.setInt(1, billId);
+        stmt.setString(2, description);
+        stmt.setDouble(3, amount);
+        stmt.setString(4, itemType);
+        stmt.setInt(5, referenceId);
+        stmt.executeUpdate();
+        stmt.close();
+    }
+    
     private void loadUpcomingReservations() {
         reservationsTableModel.setRowCount(0);
 
@@ -547,59 +698,68 @@ public class MemberDashboard extends JFrame {
     }
 
     private void editReservation(int row) {
-        try {
-            Connection conn = dbConnection.getConnection();
+    try {
+        Connection conn = dbConnection.getConnection();
 
-            // Get the reservation ID and details
-            String court = (String) reservationsTableModel.getValueAt(row, 0);
-            String dateStr = (String) reservationsTableModel.getValueAt(row, 1);
+        // Get the reservation ID and details
+        String court = (String) reservationsTableModel.getValueAt(row, 0);
+        String dateStr = (String) reservationsTableModel.getValueAt(row, 1);
 
-            // Reformat date for SQLite
-            String sqlDateStr = dateStr.substring(6) + "-" + dateStr.substring(0, 2) + "-" + dateStr.substring(3, 5);
+        // Reformat date for SQLite
+        String sqlDateStr = dateStr.substring(6) + "-" + dateStr.substring(0, 2) + "-" + dateStr.substring(3, 5);
 
-            int courtNumber = Integer.parseInt(court.replace("Court ", ""));
+        int courtNumber = Integer.parseInt(court.replace("Court ", ""));
 
-            // Get reservation ID
-            String findQuery = "SELECT r.reservation_id FROM Reservations r " +
-                    "JOIN Courts c ON r.court_id = c.court_id " +
-                    "WHERE c.court_number = ? AND r.member_id = ? " +
-                    "AND r.reservation_date = ? " +
-                    "ORDER BY r.reservation_date, r.start_time";
+        // Get reservation ID
+        String findQuery = "SELECT r.reservation_id FROM Reservations r " +
+                "JOIN Courts c ON r.court_id = c.court_id " +
+                "WHERE c.court_number = ? AND r.member_id = ? " +
+                "AND r.reservation_date = ? " +
+                "ORDER BY r.reservation_date, r.start_time";
 
-            PreparedStatement findStmt = conn.prepareStatement(findQuery);
-            findStmt.setInt(1, courtNumber);
-            findStmt.setInt(2, currentUser.getMemberId());
-            findStmt.setString(3, sqlDateStr);
+        PreparedStatement findStmt = conn.prepareStatement(findQuery);
+        findStmt.setInt(1, courtNumber);
+        findStmt.setInt(2, currentUser.getMemberId());
+        findStmt.setString(3, sqlDateStr);
 
-            ResultSet findRs = findStmt.executeQuery();
+        ResultSet findRs = findStmt.executeQuery();
 
-            if (findRs.next()) {
-                int reservationId = findRs.getInt("reservation_id");
+        if (findRs.next()) {
+            int reservationId = findRs.getInt("reservation_id");
+    
+             // Create and show the reservation edit dialog - using the correct constructor
+             ReservationEditDialog editDialog = new ReservationEditDialog(reservationId);
 
-                // Create and show the reservation edit dialog
-                ReservationEditDialog editDialog = new ReservationEditDialog(reservationId);
-                editDialog.setVisible(true);
-
-                // Reload reservations after dialog is closed
-                loadUpcomingReservations();
-            } else {
-                JOptionPane.showMessageDialog(this,
-                        "Reservation not found.",
-                        "Error",
-                        JOptionPane.ERROR_MESSAGE);
-            }
-
-            findRs.close();
-            findStmt.close();
-            conn.close();
-
-        } catch (SQLException ex) {
+            editDialog.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosed(WindowEvent e) {
+                    // This is the key addition - reload the reservation data when the dialog closes
+                    loadUpcomingReservations();
+                }
+            });
+            editDialog.setVisible(true);
+        }else {
             JOptionPane.showMessageDialog(this,
-                    "Error finding reservation: " + ex.getMessage(),
-                    "Database Error",
+                    "Reservation not found.",
+                    "Error",
                     JOptionPane.ERROR_MESSAGE);
         }
+
+        findRs.close();
+        findStmt.close();
+        conn.close();
+
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this,
+        "Error finding reservation: " + ex.getMessage(),
+        "Database Error",
+        JOptionPane.ERROR_MESSAGE);
     }
+}
+
+
+
+
     // This class represents a participant in a reservation
 // It can be either a member or a guest
 class ParticipantEntry {
@@ -986,6 +1146,140 @@ class ParticipantEntry {
 
             getContentPane().add(mainPanel);
         }
+        private boolean saveReservationChanges() {
+            // Try up to 3 times with increasing timeouts
+            for (int attempt = 1; attempt <= 3; attempt++) {
+                Connection conn = null;
+                
+                try {
+                    // Force garbage collection before attempting database operation
+                    System.gc();
+                    Thread.sleep(attempt * 200); // Increasing delay with each attempt
+                    
+                    // Get a new connection
+                    conn = dbConnection.getConnection();
+                    
+                    // Set busy timeout, increasing with each attempt
+                    Statement stmt = conn.createStatement();
+                    stmt.execute("PRAGMA busy_timeout = " + (attempt * 5000) + ";"); // 5, 10, 15 seconds
+                    stmt.close();
+                    
+                    // Start transaction
+                    conn.setAutoCommit(false);
+                    
+                    // 1. Delete all participants except primary member
+                    String deleteQuery = "DELETE FROM ReservationParticipants " +
+                        "WHERE reservation_id = ? " +
+                        "AND participant_id NOT IN " +
+                        "(SELECT MIN(participant_id) FROM ReservationParticipants " +
+                        "WHERE reservation_id = ?)";
+                    
+                    PreparedStatement pstmt = conn.prepareStatement(deleteQuery);
+                    pstmt.setInt(1, reservationId);
+                    pstmt.setInt(2, reservationId);
+                    pstmt.executeUpdate();
+                    pstmt.close();
+                    
+                    // 2. Add new participants
+                    for (int i = 1; i < participants.size(); i++) {
+                        ParticipantEntry participant = participants.get(i);
+                        
+                        if ("Member".equals(participant.getType())) {
+                            // Add member participant
+                            PreparedStatement memberStmt = conn.prepareStatement(
+                                "INSERT INTO ReservationParticipants " +
+                                "(reservation_id, member_id, guest_id) VALUES (?, ?, NULL)");
+                            memberStmt.setInt(1, reservationId);
+                            memberStmt.setInt(2, participant.getMemberId());
+                            memberStmt.executeUpdate();
+                            memberStmt.close();
+                        } else {
+                            // Add guest participant
+                            PreparedStatement guestStmt = conn.prepareStatement(
+                                "INSERT INTO ReservationParticipants " +
+                                "(reservation_id, member_id, guest_id) VALUES (?, NULL, ?)");
+                            guestStmt.setInt(1, reservationId);
+                            guestStmt.setInt(2, participant.getGuestId());
+                            guestStmt.executeUpdate();
+                            guestStmt.close();
+                        }
+                    }
+                    
+                    // Commit transaction
+                    conn.commit();
+                    
+                    JOptionPane.showMessageDialog(this, 
+                        "Reservation updated successfully.",
+                        "Success", 
+                        JOptionPane.INFORMATION_MESSAGE);
+                    
+                    return true;
+                } catch (SQLException ex) {
+                    // If this is a database locked error and not our last attempt, try again
+                    if (ex.getMessage().contains("locked") && attempt < 3) {
+                        System.out.println("Database locked, retry attempt " + (attempt + 1));
+                        
+                        // Roll back if needed
+                        if (conn != null) {
+                            try {
+                                conn.rollback();
+                            } catch (SQLException rollbackEx) {
+                                System.err.println("Error rolling back: " + rollbackEx.getMessage());
+                            }
+                        }
+                        
+                        // Continue to next attempt
+                        continue;
+                    }
+                    
+                    // Otherwise, show error
+                    if (conn != null) {
+                        try {
+                            conn.rollback();
+                        } catch (SQLException rollbackEx) {
+                            System.err.println("Error rolling back: " + rollbackEx.getMessage());
+                        }
+                    }
+                    
+                    JOptionPane.showMessageDialog(this,
+                        "Error updating reservation: " + ex.getMessage() + 
+                        "\nPlease close other windows or try again later.",
+                        "Database Error",
+                        JOptionPane.ERROR_MESSAGE);
+                    return false;
+                } catch (InterruptedException ex) {
+                    JOptionPane.showMessageDialog(this,
+                        "Operation interrupted: " + ex.getMessage(),
+                        "Error",
+                        JOptionPane.ERROR_MESSAGE);
+                    Thread.currentThread().interrupt();
+                    return false;
+                } finally {
+                    if (conn != null) {
+                        try {
+                            // Reset auto-commit
+                            conn.setAutoCommit(true);
+                            conn.close();
+                        } catch (SQLException ex) {
+                            System.err.println("Error closing connection: " + ex.getMessage());
+                        }
+                    }
+                }
+            }
+            
+            // If we get here, all attempts failed
+            JOptionPane.showMessageDialog(this,
+                "Unable to update reservation after multiple attempts.\n" +
+                "The database may be in use by another process.",
+                "Database Error",
+                JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
+
+                
+
+        
+        
 
         private void setupListeners() {
             addParticipantButton.addActionListener(e -> showAddParticipantDialog());
@@ -1233,79 +1527,7 @@ class ParticipantEntry {
             dialog.setVisible(true);
         }
 
-        private boolean saveReservationChanges() {
-            try {
-                Connection conn = dbConnection.getConnection();
-                conn.setAutoCommit(false);
-
-                try {
-                    // Remove all current participants (except primary member)
-                    String deleteQuery = "DELETE FROM ReservationParticipants " +
-                                       "WHERE reservation_id = ? " +
-                                       "AND participant_id NOT IN " +
-                                       "(SELECT MIN(participant_id) FROM ReservationParticipants WHERE reservation_id = ?)";
-
-                    PreparedStatement deleteStmt = conn.prepareStatement(deleteQuery);
-                    deleteStmt.setInt(1, reservationId);
-                    deleteStmt.setInt(2, reservationId);
-                    deleteStmt.executeUpdate();
-                    deleteStmt.close();
-
-                    // Add all participants except the first one (which is the primary member)
-                    for (int i = 1; i < participants.size(); i++) {
-                        ParticipantEntry participant = participants.get(i);
-
-                        if ("Member".equals(participant.getType())) {
-                            // Add member participant
-                            String memberQuery = "INSERT INTO ReservationParticipants " +
-                                    "(reservation_id, member_id, guest_id) VALUES (?, ?, NULL)";
-
-                            PreparedStatement memberStmt = conn.prepareStatement(memberQuery);
-                            memberStmt.setInt(1, reservationId);
-                            memberStmt.setInt(2, participant.getMemberId());
-                            memberStmt.executeUpdate();
-                            memberStmt.close();
-                        } else {
-                            // Add guest participant
-                            String guestQuery = "INSERT INTO ReservationParticipants " +
-                                    "(reservation_id, member_id, guest_id) VALUES (?, NULL, ?)";
-
-                            PreparedStatement guestStmt = conn.prepareStatement(guestQuery);
-                            guestStmt.setInt(1, reservationId);
-                            guestStmt.setInt(2, participant.getGuestId());
-                            guestStmt.executeUpdate();
-                            guestStmt.close();
-                        }
-                    }
-
-                    conn.commit();
-                    JOptionPane.showMessageDialog(this,
-                            "Reservation updated successfully.",
-                            "Success",
-                            JOptionPane.INFORMATION_MESSAGE);
-
-                    return true;
-
-                } catch (SQLException ex) {
-                    conn.rollback();
-                    JOptionPane.showMessageDialog(this,
-                            "Error updating reservation: " + ex.getMessage(),
-                            "Database Error",
-                            JOptionPane.ERROR_MESSAGE);
-                    return false;
-                } finally {
-                    conn.setAutoCommit(true);
-                    conn.close();
-                }
-
-            } catch (SQLException ex) {
-                JOptionPane.showMessageDialog(this,
-                        "Database connection error: " + ex.getMessage(),
-                        "Database Error",
-                        JOptionPane.ERROR_MESSAGE);
-                return false;
-            }
-        }
+       
     }
 
     // Enhanced profile update screen with email and password change functionality

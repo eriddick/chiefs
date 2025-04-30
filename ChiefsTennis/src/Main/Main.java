@@ -1,13 +1,11 @@
 package Main;
 
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.sql.*;
 import java.util.Properties;
-import java.io.FileInputStream;
-import java.io.File;
-import java.io.IOException;
+import javax.swing.*;
 
 // Main application class for the Tennis Club Management System with SQLite
  
